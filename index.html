@@ -734,8 +734,8 @@ function playEvolution(newStage, cb){
 // ═══════════════════════════════════════════════════════════
 function updateRedDot(){
   // 화(weekDay=2) ~ 수(weekDay=3) 사이, 탐험 잔여 1회 이상 + SP 40 이상
-  // 수(1)~화(7) 주기: 레드닷 = 화(7) 또는 수(1, 점검 당일 직전까지)
-  var isTueWed = (state.weekDay===7 || state.weekDay===1);
+  // 레드닷 = 화요일(7)만
+  var isTueWed = (state.weekDay===7);
   var eligible  = gameStarted && !eventEnded
                   && isTueWed
                   && state.weeklyExplore>=1
