@@ -314,6 +314,7 @@
                 <span class="heart-wrap"><span class="heart-bg">♥</span><span class="heart-fill" id="hf1">♥</span></span>
                 <span class="heart-wrap"><span class="heart-bg">♥</span><span class="heart-fill" id="hf2">♥</span></span>
                 <span class="heart-wrap"><span class="heart-bg">♥</span><span class="heart-fill" id="hf3">♥</span></span>
+                <span class="heart-wrap"><span class="heart-bg">♥</span><span class="heart-fill" id="hf4">♥</span></span>
               </div>
             </div>
           </div>
@@ -862,13 +863,13 @@ function render(){
     }
   }
 
-  // 하트 4개 (4단계까지, 5단계=만개)
-  // 하트기준: 1→600, 2→1200, 3→1900, 4→3200
-  var H_THR=[600,1200,1900,3200];
-  var H_HALF=[300,900,1550,2550];
-  for(var h=0;h<4;h++){
+  // 하트 5개 (단계 임계값 기준)
+  // 하트1=600, 하트2=1200, 하트3=1900, 하트4=2550, 하트5=3200
+  var H_THR=[600,1200,1900,2550,3200];
+  var H_HALF=[300,900,1550,2225,2875];
+  for(var h=0;h<5;h++){
     var pct=0;
-    if(aff>=H_THR[h])     pct=100;
+    if(aff>=H_THR[h])       pct=100;
     else if(aff>=H_HALF[h]) pct=50;
     var el=document.getElementById('hf'+h);if(el)el.style.width=pct+'%';
   }
