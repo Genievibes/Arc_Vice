@@ -534,6 +534,7 @@ function waterSeed(){
 function enableButtons(){
   document.getElementById('btn-feed').classList.remove('disabled');
   updateActionButtons();
+  updateRedDot();
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -732,19 +733,27 @@ function playEvolution(newStage, cb){
 //  레드닷 & 말풍선 알림 (화~수요일)
 // ═══════════════════════════════════════════════════════════
 function updateRedDot(){
-  // weekDay: 2=화, 3=수 조건
-  var isTueWed=(state.weekDay===2||state.weekDay===3);
-  var eligible=isTueWed&&state.weeklyExplore>=1&&state.sp>=EXPLORE_SP;
-  var dot=document.getElementById('redDot');
-  if(dot) dot.classList.toggle('show',eligible&&gameStarted&&!eventEnded);
+  // 화(weekDay=2) ~ 수(weekDay=3) 사이, 탐험 잔여 1회 이상 + SP 40 이상
+  // 수(1)~화(7) 주기: 레드닷 = 화(7) 또는 수(1, 점검 당일 직전까지)
+  var isTueWed = (state.weekDay===7 || state.weekDay===1);
+  var eligible  = gameStarted && !eventEnded
+                  && isTueWed
+                  && state.weeklyExplore>=1
+                  && state.sp>=EXPLORE_SP
+                  && !state.exploring;
 
-  // 말풍선
-  if(eligible&&gameStarted&&!eventEnded){
-    var bubble=document.getElementById('speechBubble');
-    if(bubble){
+  var dot = document.getElementById('redDot');
+  if(dot) dot.classList.toggle('show', eligible);
+
+  // 말풍선 — 조건 충족 시 새로 표시 (이미 떠있으면 갱신 안함)
+  var bubble = document.getElementById('speechBubble');
+  if(bubble){
+    if(eligible && !bubble.classList.contains('show')){
       bubble.classList.add('show');
-      if(speechTimer)clearTimeout(speechTimer);
-      speechTimer=setTimeout(function(){bubble.classList.remove('show');},5000);
+      if(speechTimer) clearTimeout(speechTimer);
+      speechTimer = setTimeout(function(){ bubble.classList.remove('show'); }, 5000);
+    } else if(!eligible){
+      bubble.classList.remove('show');
     }
   }
 }
@@ -783,12 +792,14 @@ function nextDay(){
   if(!gameStarted)return;
   day++;
   state.weekDay=(state.weekDay%7)+1;
-  document.getElementById('dayDisplay').textContent='DAY '+day;
+  var DAY_NAMES=['수','목','금','토','일','월','화'];
+  var dayName=DAY_NAMES[state.weekDay-1]||'';
+  document.getElementById('dayDisplay').textContent='DAY '+day+' ('+dayName+')';
 
   // 주간 탐험 리셋 (월요일 = weekDay 1)
   if(state.weekDay===1){
     state.weeklyExplore=1;
-    setTimeout(function(){showToast('새로운 한 주! 탐험 횟수 초기화 🗺️');},600);
+    setTimeout(function(){showToast('수요일 점검! 탐험 횟수 초기화 🗺️');},600);
   }
 
   // 일일 패널티 (1단계 이상, 즉 물주기 완료 후)
@@ -863,21 +874,23 @@ function render(){
     }
   }
 
-  // 하트 5개 (단계 임계값 기준)
-  // 하트1=600, 하트2=1200, 하트3=1900, 하트4=2550, 하트5=3200
-  var H_THR=[600,1200,1900,2550,3200];
-  var H_HALF=[300,900,1550,2225,2875];
+  // 하트 5개 — 스펙 단계 임계값 기준
+  // ♥1=600(2단계), ♥2=1200(3단계), ♥3=1900(4단계), ♥4=2550(4→5 중간), ♥5=3200(5단계 완성)
+  var H_THR  = [600, 1200, 1900, 2550, 3200];
+  var H_HALF = [300,  900, 1550, 2225, 2875];
   for(var h=0;h<5;h++){
     var pct=0;
     if(aff>=H_THR[h])       pct=100;
     else if(aff>=H_HALF[h]) pct=50;
-    var el=document.getElementById('hf'+h);if(el)el.style.width=pct+'%';
+    var hEl=document.getElementById('hf'+h);if(hEl)hEl.style.width=pct+'%';
   }
 
   // 버튼 비활성
   if(!state.exploring) updateActionButtons();
   // 주간 도트
   document.getElementById('weDots').textContent=state.weeklyExplore>=1?'●':'○';
+  // 레드닷 갱신
+  updateRedDot();
 }
 
 // 이벤트 종료 처리
