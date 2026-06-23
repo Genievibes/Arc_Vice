@@ -425,9 +425,10 @@
 // ═══════════════════════════════════════════════════════════
 //  스펙 상수
 // ═══════════════════════════════════════════════════════════
-var DAILY_SP      = 40;      // 일일 미션 SP 획득량
-var EXPLORE_SP    = 40;      // 탐험 SP 소모
-var DAILY_GIFT_SP = 40;      // 일일 보상 기준 사용량
+var DAILY_SP       = 40;  // 일일 미션 SP 획득량
+var EXPLORE_SP     = 40;  // 탐험 SP 소모
+var DAILY_GIFT_SP  = 40;  // 일일 보상 기준 사용량
+var DAILY_USE_LIMIT= 40;  // 하루 포인트 사용 제한
 
 // 상호작용 (스펙 기준)
 var ACTIONS = {
@@ -456,13 +457,13 @@ var EXPLORE_PROB = {
 var EXPLORE_RESULTS = [
   { grade:'탐험 대성공', emoji:'🌟', mult:5.0,
     log:'🌟 모코콩이 기적 같은 걸 발견해왔어요!', text:'기적 같은 발견이에요',
-    apply:function(){state.affection=clamp(state.affection+150,0,STAGE_MAX);state.sp+=20;state.health=clamp(state.health+20,0,100);}},
+    apply:function(){state.sp+=20;state.health=clamp(state.health+20,0,100);}},  // 대성공: SP+20, 체력+20
   { grade:'탐험 성공', emoji:'✨', mult:2.0,
     log:'✨ 모코콩이 엄청난 보물을 가져왔어요!', text:'엄청난 발견이에요',
-    apply:function(){state.affection=clamp(state.affection+80,0,STAGE_MAX);state.sp+=10;}},
+    apply:function(){state.sp+=10;}},  // 성공: SP+10
   { grade:'탐험 기본', emoji:'🎒', mult:1.0,
     log:'🎒 모코콩이 소소한 발견을 해왔어요', text:'소소한 발견이에요',
-    apply:function(){state.affection=clamp(state.affection+30,0,STAGE_MAX);state.hunger=clamp(state.hunger+10,0,100);}}
+    apply:function(){state.hunger=clamp(state.hunger+10,0,100);}}  // 기본: 포만감+10
 ];
 
 // 게임 상태
@@ -546,6 +547,7 @@ function doAction(type){
   // 이벤트 종료 후: 연출만 허용
   if(eventEnded){showToast(act.label);return;}
   if(state.sp<act.sp){shakeEl('spFill');showToast('새싹 포인트 부족!');return;}
+  if(state.spUsedToday+act.sp>DAILY_USE_LIMIT){showToast('오늘 포인트 사용 한도(40P)를 초과해요!');return;}
   if(type==='play'&&state.health<=0){showToast('⚠️ 체력이 없어요!');return;}
 
   state.sp=Math.max(0,state.sp-act.sp);
@@ -581,6 +583,7 @@ function selectExplore(){closeExplorePopup();startExplore();}
 function startExplore(){
   if(!gameStarted||eventEnded||state.exploring)return;
   if(state.weeklyExplore<=0||state.health<=0||state.sp<EXPLORE_SP)return;
+  if(state.spUsedToday+EXPLORE_SP>DAILY_USE_LIMIT){showToast('오늘 포인트 사용 한도(40P)를 초과해요!');return;}
 
   state.sp=Math.max(0,state.sp-EXPLORE_SP);
   state.spUsedToday+=EXPLORE_SP;
@@ -588,6 +591,7 @@ function startExplore(){
   state.weeklyExplore--;
   state.hunger=clamp(state.hunger-10,0,100);
   state.health=clamp(state.health-10,0,100);
+  state.affection=clamp(state.affection+50,0,STAGE_MAX); // 탐험 친밀도 +50
 
   lockSidebar(true);render();
   hideSpeechBubble();
@@ -612,7 +616,7 @@ function startExplore(){
     function showNext(){
       if(i<logs.length){
         logEl.textContent+=(i>0?String.fromCharCode(10):'')+logs[i];i++;
-        setTimeout(showNext,680);
+        setTimeout(showNext,550);
       } else {
         setTimeout(function(){
           overlay.classList.add('hidden');
@@ -774,10 +778,12 @@ function updateActionButtons(){
     document.getElementById('btn-explore').classList.add('disabled');
     return;
   }
-  document.getElementById('btn-feed').classList.toggle('disabled',state.sp<20);
-  document.getElementById('btn-play').classList.toggle('disabled',state.sp<20||state.health<=0);
+  var canUse20 = state.sp>=20 && state.spUsedToday+20<=DAILY_USE_LIMIT;
+  var canUse40 = state.sp>=EXPLORE_SP && state.spUsedToday+EXPLORE_SP<=DAILY_USE_LIMIT;
+  document.getElementById('btn-feed').classList.toggle('disabled',!canUse20);
+  document.getElementById('btn-play').classList.toggle('disabled',!canUse20||state.health<=0);
   document.getElementById('btn-explore').classList.toggle('disabled',
-    state.weeklyExplore<=0||state.sp<EXPLORE_SP||state.health<=0||state.exploring);
+    state.weeklyExplore<=0||!canUse40||state.health<=0||state.exploring);
 }
 function lockSidebar(lock){
   ['feed','play','explore'].forEach(function(id){
@@ -874,15 +880,23 @@ function render(){
     }
   }
 
-  // 하트 5개 — 스펙 단계 임계값 기준
-  // ♥1=600(2단계), ♥2=1200(3단계), ♥3=1900(4단계), ♥4=2550(4→5 중간), ♥5=3200(5단계 완성)
-  var H_THR  = [600, 1200, 1900, 2550, 3200];
-  var H_HALF = [300,  900, 1550, 2225, 2875];
+  // 하트 5개 — 현재 단계 내 진행도만 표현
+  // 단계별 구간: 1단계(0~599), 2단계(600~1199), 3단계(1200~1899), 4단계(1900~3199), 5단계=완성
+  var STAGE_STARTS = {1:0, 2:600, 3:1200, 4:1900, 5:3200};
+  var STAGE_ENDS   = {1:600, 2:1200, 3:1900, 4:3200, 5:3200};
+  var curSt = growthStage || 1;
+  var stStart = STAGE_STARTS[curSt] || 0;
+  var stEnd   = STAGE_ENDS[curSt]   || 600;
+  var stRange = stEnd - stStart;
+  var stProg  = curSt>=5 ? 1.0 : Math.min(1.0, Math.max(0, (aff - stStart) / stRange));
+  // 하트 5개로 진행도 표현 (각 하트 = 20%)
   for(var h=0;h<5;h++){
-    var pct=0;
-    if(aff>=H_THR[h])       pct=100;
-    else if(aff>=H_HALF[h]) pct=50;
-    var hEl=document.getElementById('hf'+h);if(hEl)hEl.style.width=pct+'%';
+    var hPct=0;
+    var threshold = (h+1)/5;      // 20%, 40%, 60%, 80%, 100%
+    var halfThres  = (h+0.5)/5;   // 10%, 30%, 50%, 70%, 90%
+    if(stProg>=threshold)       hPct=100;
+    else if(stProg>=halfThres)  hPct=50;
+    var hEl=document.getElementById('hf'+h);if(hEl)hEl.style.width=hPct+'%';
   }
 
   // 버튼 비활성
