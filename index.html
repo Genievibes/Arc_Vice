@@ -207,6 +207,31 @@
   .ep-go-sp{font-size:6.5px;color:rgba(200,240,80,0.7);}
   .ep-close{font-size:7px;color:rgba(200,240,80,0.5);cursor:pointer;background:none;border:none;margin-top:2px;text-decoration:underline;}
 
+  /* 탐험 안내 팝업 */
+  .explore-notice{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(0.9);
+    z-index:35;background:rgba(22,44,10,0.97);border-radius:14px;
+    display:flex;flex-direction:column;align-items:center;
+    gap:10px;padding:18px 16px;width:260px;
+    box-shadow:0 4px 24px rgba(0,0,0,0.55);
+    opacity:0;pointer-events:none;transition:opacity 0.2s,transform 0.2s;}
+  .explore-notice.show{opacity:1;pointer-events:auto;transform:translate(-50%,-50%) scale(1);}
+  .en-icon{font-size:28px;}
+  .en-title{font-size:8.5px;font-weight:900;color:#c8f050;letter-spacing:.8px;text-align:center;}
+  .en-body{font-size:7px;font-weight:700;color:rgba(200,240,160,0.85);
+    line-height:1.8;text-align:center;letter-spacing:.3px;}
+  .en-btns{display:flex;gap:8px;width:100%;margin-top:4px;}
+  .en-go{flex:1;padding:7px 0;border:none;border-radius:9px;cursor:pointer;
+    background:linear-gradient(135deg,rgba(106,220,56,0.3),rgba(160,240,80,0.4));
+    border:1px solid rgba(106,220,56,0.5);
+    font-size:7.5px;font-weight:900;color:#c8f050;letter-spacing:.5px;
+    transition:background 0.12s;}
+  .en-go:hover{background:linear-gradient(135deg,rgba(106,220,56,0.45),rgba(160,240,80,0.55));}
+  .en-cancel{flex:1;padding:7px 0;border:none;border-radius:9px;cursor:pointer;
+    background:rgba(255,255,255,0.08);border:1px solid rgba(200,240,160,0.25);
+    font-size:7.5px;font-weight:900;color:rgba(200,240,160,0.6);letter-spacing:.5px;
+    transition:background 0.12s;}
+  .en-cancel:hover{background:rgba(255,255,255,0.14);}
+
   /* 시작/씨앗 화면 */
   .start-screen{position:absolute;inset:0;z-index:50;background:#dcefc4;
     display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;border-radius:10px;}
@@ -381,6 +406,17 @@
               <div class="reward-items" id="rewardItems"></div>
               <div class="reward-sub" id="rewardSub">소지품으로 이동</div>
             </div>
+            <!-- 탐험 주간 안내 팝업 -->
+            <div class="explore-notice" id="exploreNotice">
+              <div class="en-icon">🗺️</div>
+              <div class="en-title">탐험은 쉽지 않은 여정입니다</div>
+              <div class="en-body">모코콩과의 친밀도를 통해<br>조금 더 가까워진다면<br>모코콩은 더 좋은 보물을<br>찾을 수 있을거에요.</div>
+              <div class="en-btns">
+                <button class="en-go" onclick="confirmExplore()">탐험하기</button>
+                <button class="en-cancel" onclick="cancelExploreNotice()">취소하기</button>
+              </div>
+            </div>
+
             <div class="explore-popup" id="explorePopup">
               <div class="ep-title">🗺️ 탐험 보내기</div>
               <div class="ep-weekly">주간 남은 횟수: <span id="epWeekly">●</span></div>
@@ -572,10 +608,30 @@ function openExplorePopup(){
   if(state.exploring){showToast('이미 탐험 중이에요!');return;}
   if(state.weeklyExplore<=0){showToast('이번 주 탐험 횟수를 모두 사용했어요!');return;}
   if(state.health<=0){showToast('⚠️ 체력이 없어 탐험할 수 없어요!');return;}
+
+  // 주간 최초 탐험 클릭 시 안내 팝업 먼저 표시
+  if(!state.weeklyExploreNoticed){
+    document.getElementById('exploreNotice').classList.add('show');
+    return;
+  }
+  openExploreMain();
+}
+
+function openExploreMain(){
   document.getElementById('ep-go').disabled=(state.sp<EXPLORE_SP);
   var we=state.weeklyExplore;
   document.getElementById('epWeekly').textContent=we>=1?'●':'○';
   document.getElementById('explorePopup').classList.add('show');
+}
+
+function confirmExplore(){
+  state.weeklyExploreNoticed=true;
+  document.getElementById('exploreNotice').classList.remove('show');
+  openExploreMain();
+}
+
+function cancelExploreNotice(){
+  document.getElementById('exploreNotice').classList.remove('show');
 }
 function closeExplorePopup(){document.getElementById('explorePopup').classList.remove('show');}
 function selectExplore(){closeExplorePopup();startExplore();}
@@ -805,6 +861,7 @@ function nextDay(){
   // 주간 탐험 리셋 (월요일 = weekDay 1)
   if(state.weekDay===1){
     state.weeklyExplore=1;
+    state.weeklyExploreNoticed=false;
     setTimeout(function(){showToast('수요일 점검! 탐험 횟수 초기화 🗺️');},600);
   }
 
@@ -918,7 +975,7 @@ function applyEventEnd(){
 // ═══════════════════════════════════════════════════════════
 function resetGame(){
   state={sp:0,spUsedToday:0,hunger:50,health:50,affection:0,
-    exploring:false,giftGiven:false,weeklyExplore:1,weekDay:1};
+    exploring:false,giftGiven:false,weeklyExplore:1,weekDay:1,weeklyExploreNoticed:false};
   day=1;gameStarted=false;growthStage=0;eventEnded=false;toastTimer=null;speechTimer=null;
 
   document.getElementById('dayDisplay').textContent='DAY 1';
@@ -927,6 +984,7 @@ function resetGame(){
   document.getElementById('screenBody').style.display='none';
   document.getElementById('rewardPopup').classList.remove('show');
   document.getElementById('explorePopup').classList.remove('show');
+  document.getElementById('exploreNotice').classList.remove('show');
   document.getElementById('exploringMsg').style.display='none';
   document.getElementById('exploreOverlay').classList.add('hidden');
   document.getElementById('exploreReturn').classList.add('hidden');
