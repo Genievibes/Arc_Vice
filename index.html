@@ -171,6 +171,25 @@
   .toast.show{opacity:1;}
 
   /* 팝업 공통 */
+  /* 성장 가능 팝업 */
+  .evolve-ready-popup{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(0.9);
+    z-index:28;background:rgba(22,44,10,0.97);border-radius:14px;
+    display:flex;flex-direction:column;align-items:center;gap:10px;
+    padding:18px 16px;width:240px;
+    box-shadow:0 4px 24px rgba(0,0,0,0.55);
+    opacity:0;pointer-events:none;transition:opacity 0.2s,transform 0.2s;}
+  .evolve-ready-popup.show{opacity:1;pointer-events:auto;transform:translate(-50%,-50%) scale(1);}
+  .erp-icon{font-size:30px;animation:erpPulse 1s ease-in-out infinite;}
+  @keyframes erpPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
+  .erp-title{font-size:10px;font-weight:900;color:#c8f050;letter-spacing:1px;}
+  .erp-sub{font-size:7px;color:rgba(200,240,160,0.7);text-align:center;line-height:1.7;}
+  .erp-btn{width:100%;padding:9px 0;border:none;border-radius:10px;cursor:pointer;
+    background:linear-gradient(135deg,rgba(255,220,60,0.35),rgba(255,180,30,0.45));
+    border:1px solid rgba(255,200,40,0.5);
+    font-size:9px;font-weight:900;color:#ffe066;letter-spacing:1px;
+    transition:background 0.12s;box-shadow:0 0 12px rgba(255,200,40,0.3);}
+  .erp-btn:hover{background:linear-gradient(135deg,rgba(255,220,60,0.5),rgba(255,180,30,0.6));}
+
   .reward-popup{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(0.9);
     z-index:25;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;
     width:230px;padding:16px 18px;background:rgba(210,245,110,0.97);border-radius:12px;
@@ -398,6 +417,13 @@
             <div class="exploring-msg dot-anim" id="exploringMsg">탐험 중</div>
             <div class="explore-overlay hidden" id="exploreOverlay"><div class="explore-log" id="exploreLog"></div></div>
             <div class="explore-return hidden" id="exploreReturn"><div class="explore-log" id="returnLog"></div></div>
+            <!-- 성장 가능 팝업 -->
+            <div class="evolve-ready-popup" id="evolveReadyPopup">
+              <div class="erp-icon">🌱</div>
+              <div class="erp-title">모코콩 성장 가능!</div>
+              <div class="erp-sub" id="erp-sub">친밀도가 충분해요<br>지금 성장시켜 보세요!</div>
+              <button class="erp-btn" onclick="doEvolve()">✨ 성장하기</button>
+            </div>
             <div class="evolution-flash" id="evoFlash"></div>
             <div class="evolution-banner" id="evoBanner"></div>
             <!-- 탐험 안내 팝업 -->
@@ -484,6 +510,20 @@ var STAGE_NAMES = {
   8:'모코콩 Lv.8',9:'모코콩 Lv.9',10:'완성된 모코콩'
 };
 
+// 단계별 보상 문구
+var STAGE_INFO = {
+  1:  { reward:'1단계 성장 보상 지급' },
+  2:  { reward:'2단계 성장 보상 지급' },
+  3:  { reward:'3단계 성장 보상 지급' },
+  4:  { reward:'4단계 성장 보상 지급' },
+  5:  { reward:'5단계 성장 보상 지급' },
+  6:  { reward:'6단계 성장 보상 지급' },
+  7:  { reward:'7단계 성장 보상 지급' },
+  8:  { reward:'8단계 성장 보상 지급' },
+  9:  { reward:'9단계 성장 보상 지급' },
+  10: { reward:'최종 완성! 대박 보상 지급' }
+};
+
 // 탐험 구간 — 성장 단계에 따라 자동 결정
 // 1~3단계: 단거리(모코코 마을 주변)
 // 4~6단계: 중거리(바다향기 숲)
@@ -564,7 +604,7 @@ var state = {
   weeklyExploreNoticed:false
 };
 
-var day=1; var gameStarted=false; var growthStage=0;
+var day=1; var gameStarted=false; var growthStage=0; var pendingStage=0;
 var eventEnded=false; var toastTimer=null; var speechTimer=null;
 
 function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v));}
@@ -617,6 +657,9 @@ function waterSeed(){
         state.sp=DAILY_SP;
         enableButtons();render();
         showToast('🌱 모코콩이 태어났어요!');
+        setTimeout(function(){
+          showRewardPopup('🌟 1단계 달성!', '1단계 성장 보상 지급', '소지품으로 이동', null);
+        }, 1200);
       },750);
     });});
   }
@@ -830,6 +873,29 @@ function showDailyGift(){
 // ═══════════════════════════════════════════════════
 //  성장 연출
 // ═══════════════════════════════════════════════════
+// ─ 성장 가능 팝업
+function showEvolveReady(nextStage){
+  var popup=document.getElementById('evolveReadyPopup');
+  var sub=document.getElementById('erp-sub');
+  sub.innerHTML=STAGE_NAMES[nextStage]+'으로 성장할 수 있어요!<br>지금 성장시켜 보세요!';
+  popup.classList.add('show');
+}
+
+// ─ 성장하기 버튼 클릭
+function doEvolve(){
+  document.getElementById('evolveReadyPopup').classList.remove('show');
+  var newStage=pendingStage;
+  pendingStage=0;
+  // 성장 연출 (2초)
+  playEvolution(newStage, function(){
+    // 연출 후 단계 보상 팝업
+    var info=STAGE_INFO[newStage];
+    if(info&&info.reward){
+      showRewardPopup('🌟 '+newStage+'단계 달성!', info.reward, '소지품으로 이동', null);
+    }
+  });
+}
+
 function playEvolution(newStage,cb){
   var flash=document.getElementById('evoFlash');
   var banner=document.getElementById('evoBanner');
@@ -844,6 +910,8 @@ function playEvolution(newStage,cb){
       setTimeout(function(){
         banner.classList.remove('show');
         cw.classList.remove('char-evolving');
+        growthStage=newStage; // 이제 단계 확정 적용
+        render();
         showToast(newStage+'단계로 성장했어요! 🌱');
         if(newStage===10&&!eventEnded){
           eventEnded=true;
@@ -852,7 +920,7 @@ function playEvolution(newStage,cb){
               '모코콩이 완전히 성장했어요!',
               '졸업 공인 증서 & 만렙 보상 지급',
               function(){applyEventEnd();});
-          },600);
+          },500);
         } else {
           if(cb)setTimeout(cb,400);
         }
@@ -995,9 +1063,11 @@ function render(){
   document.getElementById('affStageBadge').textContent=cs+'단계';
   var sd=document.getElementById('stageDisplay');if(sd)sd.textContent=cs+'단계';
 
-  // 단계 상승 연출
+  // 단계 상승 감지 → 성장 가능 팝업 표시 (아직 growthStage는 변경 전 유지)
   if(gameStarted&&prevStage>0&&cs>prevStage){
-    setTimeout(function(){playEvolution(cs,null);},300);
+    growthStage=prevStage; // 팝업 닫고 성장하기 누를 때까지 이전 단계 유지
+    pendingStage=cs;       // 도달할 단계 저장
+    setTimeout(function(){ showEvolveReady(cs); },400);
   }
 
   // 하트 5개 — 현재 단계 내 진행도
@@ -1042,6 +1112,8 @@ function resetGame(){
   document.getElementById('speechBubble').classList.remove('show');
   document.getElementById('redDot').classList.remove('show');
   document.getElementById('evoFlash').classList.remove('show');
+  document.getElementById('evolveReadyPopup').classList.remove('show');
+  pendingStage=0;
   document.getElementById('evoBanner').classList.remove('show');
   var cw=document.getElementById('charWrap');
   cw.style.display='block';document.getElementById('charShadow').style.display='block';
