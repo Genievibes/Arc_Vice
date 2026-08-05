@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>아크바이스 성장 시뮬레이터 — 일자별 레벨 달성 시점</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:'Malgun Gothic','맑은 고딕',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  background:#0e1526;color:#e8edf7;padding:24px;line-height:1.6;
+}
+.wrap{max-width:1240px;margin:0 auto}
+h1{font-size:26px;margin-bottom:6px;letter-spacing:-.5px}
+h1 .em{color:#6fe3a8}
+.sub{color:#8b9ab5;font-size:13px;margin-bottom:22px}
+.card{background:#16203a;border:1px solid #24314f;border-radius:14px;padding:20px;margin-bottom:18px}
+.card h2{font-size:16px;margin-bottom:14px;color:#9fd0ff;display:flex;align-items:center;gap:8px}
+.card h2::before{content:'';width:4px;height:16px;background:#6fe3a8;border-radius:2px}
+
+/* ── 컨트롤 ── */
+.ctrl{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:12px;color:#8b9ab5;font-weight:600}
+select,input[type=number]{
+  background:#0e1526;border:1px solid #2f3f63;color:#e8edf7;
+  padding:9px 12px;border-radius:8px;font-size:13px;font-family:inherit;min-width:130px;
+}
+select{min-width:300px;cursor:pointer}
+select:focus,input:focus{outline:none;border-color:#6fe3a8}
+button{
+  background:#6fe3a8;color:#0e1526;border:none;padding:10px 22px;border-radius:8px;
+  font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:.15s;
+}
+button:hover{background:#8bf0bd;transform:translateY(-1px)}
+button.ghost{background:#24314f;color:#cfe0ff}
+button.ghost:hover{background:#2f3f63}
+.chk{display:flex;align-items:center;gap:7px;font-size:13px;color:#cfe0ff;cursor:pointer;padding-bottom:9px}
+.chk input{width:16px;height:16px;accent-color:#6fe3a8;cursor:pointer}
+.custom-box{display:none;gap:14px;flex-wrap:wrap;align-items:flex-end;
+  margin-top:14px;padding-top:14px;border-top:1px dashed #2f3f63;width:100%}
+.custom-box.on{display:flex}
+.desc{margin-top:12px;font-size:12.5px;color:#8b9ab5;background:#0e1526;
+  padding:10px 14px;border-radius:8px;border-left:3px solid #2f3f63}
+
+/* ── 요약 KPI ── */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px}
+.kpi{background:#0e1526;border:1px solid #24314f;border-radius:10px;padding:14px 16px}
+.kpi .k{font-size:11px;color:#8b9ab5;font-weight:600;letter-spacing:.3px}
+.kpi .v{font-size:22px;font-weight:800;margin-top:4px;letter-spacing:-.5px}
+.kpi .u{font-size:12px;color:#8b9ab5;font-weight:600;margin-left:2px}
+.v.good{color:#6fe3a8}.v.warn{color:#ffc857}.v.bad{color:#ff7a7a}.v.info{color:#9fd0ff}
+
+/* ── 레벨 타임라인 ── */
+.tl{display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:8px}
+.tl .n{background:#0e1526;border:1px solid #24314f;border-radius:10px;padding:11px 8px;text-align:center}
+.tl .n.max{border-color:#6fe3a8;background:#12281f}
+.tl .n .s{font-size:11px;color:#8b9ab5;font-weight:700}
+.tl .n .d{font-size:19px;font-weight:800;color:#9fd0ff;margin:3px 0 1px}
+.tl .n.max .d{color:#6fe3a8}
+.tl .n .g{font-size:10.5px;color:#5f6d8a}
+
+/* ── 표 ── */
+.tblwrap{max-height:620px;overflow:auto;border:1px solid #24314f;border-radius:10px}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+thead th{
+  position:sticky;top:0;background:#1d2947;color:#9fd0ff;font-size:11px;
+  padding:10px 8px;text-align:center;border-bottom:1px solid #2f3f63;white-space:nowrap;z-index:2;
+}
+tbody td{padding:8px;text-align:center;border-bottom:1px solid #1b2540;white-space:nowrap}
+tbody tr:hover{background:#1b2540}
+tr.lv{background:#12281f}
+tr.lv:hover{background:#173323}
+tr.dg{background:#2a1618}
+tr.dg:hover{background:#361b1e}
+tr.idle td{color:#5f6d8a}
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:700}
+.badge.up{background:#6fe3a8;color:#0e1526}
+.badge.d{background:#ff7a7a;color:#2a1618}
+.acts{font-size:11px;color:#8b9ab5;text-align:left!important;padding-left:12px!important}
+.bar{display:inline-block;width:52px;height:7px;background:#24314f;border-radius:4px;
+  overflow:hidden;vertical-align:middle;margin-right:6px}
+.bar i{display:block;height:100%;border-radius:4px}
+.bar i.h{background:#ffc857}.bar i.p{background:#6fe3a8}.bar i.z{background:#ff7a7a}
+.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:11.5px;color:#8b9ab5;margin-bottom:10px}
+.legend span{display:flex;align-items:center;gap:6px}
+.sw{width:12px;height:12px;border-radius:3px;display:inline-block}
+
+/* ── 리스크 ── */
+.risk{border-left:4px solid #ff7a7a;background:#0e1526;border-radius:0 10px 10px 0;
+  padding:13px 16px;margin-bottom:11px}
+.risk.mid{border-left-color:#ffc857}
+.risk.ok{border-left-color:#6fe3a8}
+.risk .t{font-weight:700;font-size:13.5px;margin-bottom:5px}
+.risk .b{font-size:12.5px;color:#a9b8d3}
+.risk .t .lvl{font-size:10.5px;padding:2px 7px;border-radius:20px;margin-right:7px;
+  background:#ff7a7a;color:#2a1618;font-weight:800}
+.risk.mid .t .lvl{background:#ffc857;color:#2a2416}
+.risk.ok .t .lvl{background:#6fe3a8;color:#12281f}
+.foot{color:#5f6d8a;font-size:11.5px;text-align:center;padding:16px 0 6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>🌱 아크바이스 <span class="em">성장 시뮬레이터</span></h1>
+  <p class="sub">
+    이벤트 기획서(수정안) 수치를 그대로 적용해, <b>플레이 전략별 일자별 레벨 달성 시점</b>과
+    <b>불쾌감성(스탯 고갈·행동 잠김·보상 사장) 리스크</b>를 계산합니다.
+  </p>
+
+  <!-- ─── 설정 ─── -->
+  <div class="card">
+    <h2>시뮬레이션 설정</h2>
+    <div class="ctrl">
+      <div class="field">
+        <label>플레이 전략</label>
+        <select id="strategy"></select>
+      </div>
+      <div class="field">
+        <label>시뮬레이션 일수</label>
+        <input type="number" id="days" value="70" min="7" max="180">
+      </div>
+      <div class="field">
+        <label>시작 요일</label>
+        <select id="startDay" style="min-width:130px">
+          <option value="1" selected>수 (정기점검)</option>
+          <option value="2">목</option><option value="3">금</option>
+          <option value="4">토</option><option value="5">일</option>
+          <option value="6">월</option><option value="7">화</option>
+        </select>
+      </div>
+      <label class="chk"><input type="checkbox" id="bankSP" checked> 이월 SP 사용</label>
+      <button id="run">▶ 시뮬레이션 실행</button>
+      <button class="ghost" id="csv">⤓ CSV 내려받기</button>
+
+      <div class="custom-box" id="customBox">
+        <div class="field">
+          <label>하루 먹이기 횟수</label>
+          <select id="cFeed"><option value="1" selected>1회 (최대)</option><option value="0">0회</option></select>
+        </div>
+        <div class="field">
+          <label>하루 놀아주기 횟수</label>
+          <select id="cPlay">
+            <option value="99" selected>SP 소진까지</option>
+            <option value="0">0회</option><option value="1">1회</option>
+            <option value="2">2회</option><option value="3">3회</option><option value="4">4회</option>
+          </select>
+        </div>
+        <label class="chk"><input type="checkbox" id="cExplore" checked> 주간 탐험 사용</label>
+      </div>
+    </div>
+    <div class="desc" id="stratDesc"></div>
+  </div>
+
+  <!-- ─── 요약 ─── -->
+  <div class="card">
+    <h2>결과 요약</h2>
+    <div class="kpis" id="kpis"></div>
+  </div>
+
+  <!-- ─── 레벨 타임라인 ─── -->
+  <div class="card">
+    <h2>레벨별 달성 일차</h2>
+    <div class="tl" id="timeline"></div>
+  </div>
+
+  <!-- ─── 불쾌감성 진단 ─── -->
+  <div class="card">
+    <h2>불쾌감성 진단</h2>
+    <div id="risks"></div>
+  </div>
+
+  <!-- ─── 일자별 표 ─── -->
+  <div class="card">
+    <h2>일자별 상세 로그</h2>
+    <div class="legend">
+      <span><i class="sw" style="background:#12281f;border:1px solid #6fe3a8"></i> 레벨업 발생일</span>
+      <span><i class="sw" style="background:#2a1618;border:1px solid #ff7a7a"></i> 스탯 0 (불쾌 구간)</span>
+      <span><i class="sw" style="background:#1b2540"></i> 무행동일 (할 게 없음)</span>
+    </div>
+    <div class="tblwrap">
+      <table>
+        <thead><tr>
+          <th>DAY</th><th>요일</th><th>레벨</th><th>단계명</th>
+          <th>친밀도</th><th>다음까지</th><th>포만감</th><th>체력</th>
+          <th>SP 사용</th><th>SP 잔량</th><th style="text-align:left">행동 내역</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <p class="foot">아크바이스(모코콩) 다마고치형 웹 이벤트 · 로직 출처: index.html / sim-engine.js</p>
+</div>
+
+<script src="sim-engine.js"></script>
+<script>
+'use strict';
+var SIM = window.ArcViceSim;
+var SPEC = SIM.SPEC;
+var lastResult = null;
+
+// ── 전략 셀렉트 채우기 ──
+(function(){
+  var sel = document.getElementById('strategy');
+  var order = ['intended','safeOptimal','playFirst','lazy'];
+  order.forEach(function(k){
+    var o = document.createElement('option');
+    o.value = k; o.textContent = SIM.STRATEGIES[k].name;
+    sel.appendChild(o);
+  });
+  var o = document.createElement('option');
+  o.value = 'custom'; o.textContent = '커스텀 (직접 설정)';
+  sel.appendChild(o);
+})();
+
+function buildStrategy(){
+  var k = document.getElementById('strategy').value;
+  if(k !== 'custom') return k;
+  return SIM.customStrategy({
+    feed: parseInt(document.getElementById('cFeed').value,10),
+    play: parseInt(document.getElementById('cPlay').value,10),
+    explore: document.getElementById('cExplore').checked
+  });
+}
+
+function run(){
+  var strat = buildStrategy();
+  lastResult = SIM.simulate({
+    strategy: strat,
+    days: Math.max(7, Math.min(180, parseInt(document.getElementById('days').value,10)||70)),
+    startWeekDay: parseInt(document.getElementById('startDay').value,10),
+    bankSP: document.getElementById('bankSP').checked
+  });
+  document.getElementById('stratDesc').textContent = lastResult.strategyDesc;
+  renderKpis(lastResult);
+  renderTimeline(lastResult);
+  renderRisks(lastResult);
+  renderTable(lastResult);
+}
+
+// ── KPI ──
+function renderKpis(r){
+  var s = r.stats;
+  var items = [
+    { k:'10단계 달성 = 완주 (1,880)', v:r.completeDay ? r.completeDay : (s.deadEnd ? '불가' : '미달'), u:r.completeDay?'일차':'', c:r.completeDay?'good':'bad' },
+    { k:'탐험 전용 전환', v:r.completeDay ? r.completeDay : '미달', u:r.completeDay?'일차':'', c:r.completeDay?'good':'bad' },
+    { k:'최종 친밀도', v:r.finalAffection.toLocaleString(), u:'/ 1,880', c:r.finalAffection>=SPEC.STAGE_MAX?'good':'warn' },
+    { k:'체력 0 경험일', v:s.zeroHealthDays, u:'일', c:s.zeroHealthDays===0?'good':(s.zeroHealthDays<=3?'warn':'bad') },
+    { k:'포만감 0 경험일', v:s.zeroHungerDays, u:'일', c:s.zeroHungerDays===0?'good':(s.zeroHungerDays<=3?'warn':'bad') },
+    { k:'무행동일 (할 게 없음)', v:s.idleDays, u:'일', c:s.idleDays<=5?'good':(s.idleDays<=20?'warn':'bad') },
+    { k:'Cap으로 버려진 회복량', v:(s.wastedFeedHunger+s.wastedFeedHealth), u:'pt', c:(s.wastedFeedHunger+s.wastedFeedHealth)===0?'good':'warn' },
+    { k:'미사용 사장 SP', v:s.leftoverSP.toLocaleString(), u:'P', c:s.leftoverSP===0?'good':'warn' }
+  ];
+  document.getElementById('kpis').innerHTML = items.map(function(i){
+    return '<div class="kpi"><div class="k">'+i.k+'</div>'+
+           '<div class="v '+i.c+'">'+i.v+'<span class="u">'+i.u+'</span></div></div>';
+  }).join('');
+}
+
+// ── 레벨 타임라인 ──
+function renderTimeline(r){
+  var html = '';
+  for(var s=1; s<=SPEC.MAX_STAGE; s++){
+    var d = r.levelDays[s];
+    var prev = r.levelDays[s-1];
+    // 10단계는 9단계 완료(1,880)와 동일 시점이므로 경과가 0일 → '즉시' 로 표기
+    var gap = (d && prev)
+      ? (d - prev === 0 ? '즉시' : '+'+(d-prev)+'일')
+      : (s===1 ? '시작' : '—');
+    html += '<div class="n'+(s===SPEC.MAX_STAGE?' max':'')+'">'+
+              '<div class="s">'+SPEC.STAGE_NAMES[s]+'</div>'+
+              '<div class="d">'+(d?d+'일':'미달')+'</div>'+
+              '<div class="g">'+(d?gap:'누적 '+SPEC.STAGE_THR[s].toLocaleString())+'</div>'+
+            '</div>';
+  }
+  // 9단계 완료(1,880) 즉시 10단계 도달 = 완주 = 탐험 전용 전환 시점 (모두 동일 시점).
+  //   기획서상 10단계는 구간 체류 기간·구간 필요 친밀도가 없으므로 [-],
+  //   타임라인에서는 9단계와 같은 일차에 '즉시' 로 표시됩니다.
+  document.getElementById('timeline').innerHTML = html;
+}
+
+// ── 불쾌감성 진단 ──
+function renderRisks(r){
+  var s = r.stats, out = [];
+  var eff = SIM.efficiency();
+
+  // 1. 행동 효율 불균형
+  var ratio = (eff.play / eff.feed).toFixed(1);
+  out.push({
+    lv: ratio >= 2 ? 'high' : 'mid',
+    t: '행동 간 효율 불균형 — 놀아주기가 먹이기보다 '+ratio+'배 효율적',
+    b: '포인트당 친밀도: 먹이기 '+eff.feed.toFixed(2)+' / 놀아주기 '+eff.play.toFixed(2)+' / 탐험 '+eff.explore.toFixed(2)+'. '+
+       '동일한 30P를 먹이기 1회(친밀도 +20)와 놀아주기 3회(+60)에 쓸 때 결과가 3배 차이 납니다. '+
+       '"정성껏 밥을 주는 행동이 손해"라는 인식은 육성 게임에서 가장 큰 불쾌감 요인입니다.'
+  });
+
+  // 2. Cap 버림
+  var wasted = s.wastedFeedHunger + s.wastedFeedHealth;
+  out.push({
+    lv: wasted === 0 ? 'ok' : (wasted >= 500 ? 'high' : 'mid'),
+    t: 'Cap 초과 회복량 버림 — 총 '+wasted+'pt 소멸',
+    b: wasted === 0
+      ? '이 전략에서는 스탯이 100에 붙지 않아 회복량이 버려지지 않았습니다.'
+      : '포만감·체력이 100에 도달한 뒤 먹이기를 하면 +30/+35 중 초과분이 버려집니다. '+
+        '30P를 지불했는데 눈에 보이는 변화가 없는 순간이 반복되며, 유저는 "속았다"고 느낍니다. '+
+        '스탯 게이지가 꽉 찬 상태에서 먹이기 버튼을 비활성화하거나 초과분을 친밀도로 환산해 주세요.'
+  });
+
+  // 3. 스탯 0 잠김
+  out.push({
+    lv: s.zeroHealthDays === 0 ? 'ok' : (s.zeroHealthDays >= 5 ? 'high' : 'mid'),
+    t: '체력 0으로 인한 행동 잠김 — '+s.zeroHealthDays+'일 발생'+
+       (s.firstZeroHealthDay ? ' (최초 '+s.firstZeroHealthDay+'일차)' : ''),
+    b: s.zeroHealthDays === 0
+      ? '체력이 0에 닿지 않아 "접속했는데 아무것도 못 하는" 상황이 없습니다.'
+      : '체력이 0이면 놀아주기·탐험이 모두 잠깁니다. 효율을 좇아 놀아주기를 반복한 유저가 '+
+        '역으로 페널티를 받는 구조여서, 최적 플레이가 곧 불쾌한 플레이가 되는 역설이 생깁니다.'
+  });
+
+  // 4. 포만감 무기능
+  out.push({
+    lv: 'mid',
+    t: '포만감이 아무것도 잠그지 않는 장식 스탯',
+    b: '현재 로직에서 행동을 제한하는 조건은 체력 0뿐입니다. 포만감은 0이 되어도 페널티가 없어 '+
+       '게이지가 두 개인 이유를 유저가 알 수 없습니다. 관리 대상이 실제로는 하나라 UI만 복잡해집니다.'
+  });
+
+  // 5. 1,880(완주) 도달 가능성 / 데드엔드
+  if(s.deadEnd){
+    out.push({
+      lv:'high',
+      t:'체력 고갈 + 탐험 미사용 — 친밀도 '+r.finalAffection.toLocaleString()+'에서 정지',
+      b:'체력이 0이 되면 놀아주기가 잠기고, 탐험까지 사용하지 않으면 친밀도를 올릴 수단이 '+
+        '먹이기(일 1회)뿐입니다. 회복이 지연되는 동안 성장이 멈춰 이탈 위험이 큽니다.'
+    });
+  } else if(!r.completeDay){
+    out.push({
+      lv:'high',
+      t:'친밀도 1,880 미달 — '+r.days+'일 종료 시 '+r.finalAffection.toLocaleString()+' (부족 '+s.affectionGap+')',
+      b:'10단계 달성(완주)까지 일일 +40 기준 약 '+s.extraDaysNeeded+'일이 더 필요합니다. '+
+        '설정한 시뮬레이션 기간이 기획 목표(47일차 완주)보다 짧거나, 전략이 일일 40P를 '+
+        '다 쓰지 않고 있는지 확인하세요.'
+    });
+  } else {
+    out.push({ lv:'ok', t:'10단계 달성(완주) — '+r.completeDay+'일차'+
+        (r.completeDay===SPEC.STAGE_DONE_DAY[10]?' (기획 목표 '+SPEC.STAGE_DONE_DAY[10]+'일차 일치)':''),
+      b:'9단계 완료 누적('+SPEC.STAGE_THR[SPEC.MAX_STAGE-1].toLocaleString()+') = 10단계 누적 = '+
+        '친밀도 상한이므로, 9단계를 완료하는 순간 곧바로 만렙에 도달합니다 (승급 = 완주). '+
+        '10단계는 구간 체류 기간·구간 필요 친밀도가 없어[-] 마지막 육성 구간은 '+
+        '8단계('+SPEC.STAGE_THR[8].toLocaleString()+', '+SPEC.STAGE_DONE_DAY[8]+'일차)에서 '+
+        SPEC.STAGE_NEED[9]+'(일일 +40 x '+SPEC.STAGE_DWELL[9]+'일)을 쌓는 구간이며, '+
+        '1,880 달성 즉시 탐험 전용으로 전환됩니다. '+
+        '완주 후 탐험은 스탯을 소모하지 않아 교착이 발생하지 않습니다.' });
+  }
+
+  // 6. 무행동일 / 완주 후 SP 사장
+  out.push({
+    lv: s.idleDays <= 5 ? 'ok' : (s.idleDays >= 20 ? 'high' : 'mid'),
+    t: '무행동일 '+s.idleDays+'일 — 접속해도 할 것이 없는 날'+
+       (s.leftoverSP>0 ? ' (미사용 SP '+s.leftoverSP.toLocaleString()+'P)' : ''),
+    b: s.idleDays <= 5
+      ? '매일 접속 동기가 유지됩니다.'
+      : '주로 10단계 달성(완주, 1,880) 이후 구간입니다. SP는 계속 지급되지만 먹이기·놀아주기가 잠겨 있어 '+
+        '주 1회 탐험 외에는 쓸 곳이 없고, '+s.leftoverSP.toLocaleString()+'P가 사장됩니다. '+
+        '완주 후 SP 교환소나 반복 보상을 붙이면 지급되는 포인트가 실제 가치를 갖게 됩니다.'
+  });
+
+  // 7. 초반 페이스
+  var d5 = r.levelDays[5];
+  out.push({
+    lv: (d5 && d5 <= 14) ? 'ok' : 'mid',
+    t: '초반 성장 체감 — 5단계 도달 '+(d5 ? d5+'일차' : '미달'),
+    b: (d5 && d5 <= 14)
+      ? '1~5단계가 2주 내에 끝나 초반 성장 보상이 촘촘합니다. 이탈 방지에 유리한 페이스입니다.'
+      : '5단계 도달까지 2주를 넘깁니다. 초반 보상 간격이 길어 흥미 유지가 어렵습니다.'
+  });
+
+  document.getElementById('risks').innerHTML = out.map(function(o){
+    var cls = o.lv==='high' ? '' : (o.lv==='mid' ? ' mid' : ' ok');
+    var lbl = o.lv==='high' ? '위험' : (o.lv==='mid' ? '주의' : '양호');
+    return '<div class="risk'+cls+'"><div class="t"><span class="lvl">'+lbl+'</span>'+o.t+'</div>'+
+           '<div class="b">'+o.b+'</div></div>';
+  }).join('');
+}
+
+// ── 일자별 표 ──
+function bar(v, kind){
+  var w = Math.max(0, Math.min(100, v));
+  var c = v<=0 ? 'z' : kind;
+  return '<span class="bar"><i class="'+c+'" style="width:'+w+'%"></i></span>'+v;
+}
+function renderTable(r){
+  document.getElementById('tbody').innerHTML = r.rows.map(function(x){
+    var cls = x.danger ? 'dg' : (x.leveledUp ? 'lv' : (x.idle ? 'idle' : ''));
+    return '<tr class="'+cls+'">'+
+      '<td><b>'+x.day+'</b></td>'+
+      '<td>'+x.dayName+'</td>'+
+      '<td>'+x.stage+(x.leveledUp?' <span class="badge up">UP</span>':'')+'</td>'+
+      '<td>'+x.stageName+'</td>'+
+      '<td><b>'+x.affection.toLocaleString()+'</b></td>'+
+      '<td>'+(x.stage>=SPEC.MAX_STAGE ? '—' : x.needNext)+'</td>'+
+      '<td>'+bar(x.hunger,'p')+'</td>'+
+      '<td>'+bar(x.health,'h')+'</td>'+
+      '<td>'+x.spSpent+'P</td>'+
+      '<td>'+x.spLeft+'P</td>'+
+      '<td class="acts">'+(x.actions.length ? x.actions.join(' · ') : '<span class="badge d">행동 없음</span>')+'</td>'+
+    '</tr>';
+  }).join('');
+}
+
+// ── CSV ──
+function downloadCsv(){
+  if(!lastResult) return;
+  var head = ['DAY','요일','레벨','단계명','친밀도','다음까지','포만감','체력','SP사용','SP잔량','행동내역'];
+  var lines = [head.join(',')];
+  lastResult.rows.forEach(function(x){
+    lines.push([x.day,x.dayName,x.stage,x.stageName,x.affection,x.needNext,
+                x.hunger,x.health,x.spSpent,x.spLeft,'"'+x.actions.join(' / ')+'"'].join(','));
+  });
+  var blob = new Blob(['\uFEFF'+lines.join('\n')], {type:'text/csv;charset=utf-8'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'arcvice_sim_'+lastResult.strategy+'_'+lastResult.days+'d.csv';
+  a.click(); URL.revokeObjectURL(a.href);
+}
+
+// ── 이벤트 바인딩 ──
+document.getElementById('run').addEventListener('click', run);
+document.getElementById('csv').addEventListener('click', downloadCsv);
+document.getElementById('strategy').addEventListener('change', function(){
+  document.getElementById('customBox').className = 'custom-box'+(this.value==='custom'?' on':'');
+  run();
+});
+['days','startDay','bankSP','cFeed','cPlay','cExplore'].forEach(function(id){
+  document.getElementById(id).addEventListener('change', run);
+});
+
+run();
+</script>
+</body>
+</html>
