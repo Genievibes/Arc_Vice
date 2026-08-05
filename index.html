@@ -487,7 +487,7 @@
 var DAILY_SP        = 40;   // 일일 미션 획득 SP (일 최대 40P)
 var EXPLORE_SP      = 40;   // 탐험 SP 소모
 var DAILY_GIFT_SP   = 40;   // 일일 보상 기준 누적 사용량 (당일 40P 소모 시 지급)
-var STAGE_MAX       = 1840; // 친밀도 최대치 (8주차 완주 타임라인 반영 조정 수치)
+var STAGE_MAX       = 1880; // 친밀도 상한 = 10단계 달성 수치 (승급 = 완주, 47일차)
 var HUNGER_INIT     = 50;   // 포만감 초기값
 var HEALTH_INIT     = 50;   // 체력 초기값
 var STAT_MAX        = 100;  // 포만감/체력 최대값 (상한선 Cap, 초과 회복량은 버림)
@@ -503,32 +503,53 @@ var ACTIONS = {
   play: { sp:10, hunger:-10, health:-15, affection:+20, label:'🎮 신난다!', dailyOnce:false }
 };
 
-// 성장 단계 누적 친밀도 (기획서 4. 캐릭터 성장 단계 및 필요 친밀도 구조)
-// 0단계는 물주기 튜토리얼 → 1단계 강제 승급 (누적 0)
-// 1~5단계: 빠른 성장 / 6~9단계: 주 1회 레벨업
-// ※ STAGE_THR[10] = 10단계로 "승급"하는 누적 친밀도 (= 필요 친밀도 총합 1,700)
-//   STAGE_MAX = 1,840 은 친밀도 상한(최종 완주 수치)으로, 만렙 승급 후
-//   추가 140(≈3.5일)을 더 쌓아 8주차 완주 타임라인을 충족시킵니다.
+// 성장 단계 누적 친밀도 (기획서 2. 단계별 친밀도 밸런스 테이블)
+//  · 일일 획득 가능 최대 포인트 40P → 일일 획득 가능 친밀도 최대 +40
+//  · STAGE_THR[s] = s단계를 "달성(= 완료)"하는 누적 친밀도 (기획서 표의 '누적 친밀도' 열 그대로)
+//  · 9단계 완료(누적 1,880) 즉시 10단계 도달 = 완주 = 친밀도 상한 = 47일차
+//
+//  단계 | 명칭                    | 체류 기간 | 구간 필요 | 누적(STAGE_THR) | 누적 완료 일차
+//   0   | 모코코 씨앗             | 당일(0일) |     -    |        -        | 튜토리얼 (물주기 시 즉시 승급)
+//   1   | 모코콩 Lv.1             |    0일   |     0    |         0       | 1일차 시작 즉시 (물주기)
+//   2   | 모코콩 Lv.2             |    2일   |    80    |        80       | 2일차 완료
+//   3   | 모코콩 Lv.3             |    5일   |   200    |       280       | 7일차 완료   ← 1주차 단거리 탐험 구간
+//   4   | 모코코 Lv.4             |    7일   |   280    |       560       | 14일차 완료  ← 2주차 중거리 탐험 해금
+//   5   | 모코코 Lv.5             |    6일   |   240    |       800       | 20일차 완료
+//   6   | 모코코 Lv.6             |    6일   |   240    |     1,040       | 26일차 완료
+//   7   | 모코코 Lv.7             |    7일   |   280    |     1,320       | 33일차 완료
+//   8   | 모코코 Lv.8             |    7일   |   280    |     1,600       | 40일차 완료
+//   9   | 모코코 Lv.9             |    7일   |   280    |     1,880       | 47일차 완료  ← 7일 소요 후 만렙 승급
+//  10   | 모코코 Lv.10 (만렙코코)  |     -    |     -    |     1,880       | 47일차 최종 완성
+//
+// ※ 0/1단계: 최초 '물주기' 실행 시 당일 즉시 승급 (체류 0일, 1일차 시작 즉시 1단계 달성).
+//   1단계는 누적 0이므로 추가 친밀도가 필요하지 않습니다.
+// ※ 2~3단계는 빠른 성장 체감 구간, 4~9단계는 단계별 최대 7일 이내 체류의 점진적 성장 구간입니다.
+// ※ 10단계(만렙코코)는 체류 기간·구간 필요 친밀도가 모두 없습니다 [-].
+//   STAGE_THR[9] === STAGE_THR[10] === STAGE_MAX === 1,880 이므로
+//   9단계를 완료하는 순간 그대로 10단계에 도달하며 즉시 [탐험 전용] 모드로 전환됩니다.
+//   (stageOf 역방향 스캔이 누적 1,880에서 10단계를 반환합니다.)
 var STAGE_THR = {
-  1:0, 2:100, 3:200, 4:340, 5:480,
-  6:660, 7:900, 8:1140, 9:1420, 10:1700
+  1:0, 2:80, 3:280, 4:560, 5:800,
+  6:1040, 7:1320, 8:1600, 9:1880, 10:1880
 };
 
-// 각 단계에서 다음 단계로 승급하는 데 필요한 친밀도 (구간 폭)
+// 각 단계에 도달하는 데 필요한 친밀도 (기획서 표의 '구간 필요 친밀도')
 // 누적 임계값(STAGE_THR)에서 자동 도출 → 두 표가 어긋날 수 없음
-// 도출 결과: 100/100/140/140/180/240/240/280/280 (기획서 기재값과 일치)
+// 도출 결과: 0/80/200/280/240/240/280/280/280/0 (기획서 기재값과 일치, 총합 1,880)
+//  · [1]  = 0 → 물주기로 1일차 시작 즉시 달성
+//  · [10] = 0 → 9단계 완료(1,880) 즉시 만렙 도달 (요구치 없음 [-])
 var STAGE_NEED = (function(){
   var need={};
-  for(var s=1;s<MAX_STAGE;s++) need[s]=STAGE_THR[s+1]-STAGE_THR[s];
-  need[MAX_STAGE]=0;   // 만렙: 추가 성장 없음
-  return need;
+  need[1]=0;                                            // 1단계: 물주기로 즉시 달성 (누적 0)
+  for(var s=2;s<=MAX_STAGE;s++) need[s]=STAGE_THR[s]-STAGE_THR[s-1];
+  return need;                                          // need[10] === 0 (만렙 요구치 없음)
 })();
 
 // 단계별 명칭 (1~3 모코콩 / 4~10 모코코)
 var STAGE_NAMES = {
   0:'모코코 씨앗',1:'모코콩 Lv.1',2:'모코콩 Lv.2',3:'모코콩 Lv.3',
   4:'모코코 Lv.4',5:'모코코 Lv.5',6:'모코코 Lv.6',7:'모코코 Lv.7',
-  8:'모코코 Lv.8',9:'모코코 Lv.9',10:'만렙코코'
+  8:'모코코 Lv.8',9:'모코코 Lv.9',10:'모코코 Lv.10 (만렙코코)'
 };
 
 // 단계별 보상 문구
@@ -558,6 +579,24 @@ var MYSTERY_BOX_POOL = [
 
 // 탐험 구간 — 성장 단계에 따라 자동 결정 (기획서 5. 탐험 보상)
 // 1~3단계: 단거리(A) / 4~7단계: 중거리(B+D) / 8~10단계: 장거리(C+D)
+//
+// ── 주차별 탐험 보상 획득 시점 테이블 ──────────────────────────────────
+//  · 탐험은 주간 1회. 정기점검(수요일, weekDay 1)에 초기화되고 화요일(weekDay 7)에 알림
+//  · 일일 친밀도 +40 정속 성장 기준 (누적 친밀도 = 40 x 일차)
+//
+//  주차  | 일차 구간  | 탐험 수행 일차 | 누적 친밀도 | 성장 단계 | 탐험 구간 | 보상
+//  1주차 |  1~7일차   |   7일차 (화)   |     280     |  3단계    | 단거리    | A
+//  2주차 |  8~14일차  |  14일차 (화)   |     560     |  4단계    | 중거리    | B + 미지의 상자(D)  ← 해금
+//  3주차 | 15~21일차  |  21일차 (화)   |     840     |  5단계    | 중거리    | B + 미지의 상자(D)
+//  4주차 | 22~28일차  |  28일차 (화)   |   1,120     |  6단계    | 중거리    | B + 미지의 상자(D)
+//  5주차 | 29~35일차  |  35일차 (화)   |   1,400     |  7단계    | 중거리    | B + 미지의 상자(D)
+//  6주차 | 36~42일차  |  42일차 (화)   |   1,680     |  8단계    | 장거리    | C + 미지의 상자(D)
+//  7주차 | 43~49일차  |  47일차 완주   |   1,880     | 10단계    | 장거리    | C + 미지의 상자(D)
+//
+// ※ 1주차 단거리 탐험은 3단계 완료 시점(7일차, 누적 280)에 수행됩니다.
+// ※ 중거리 탐험은 4단계 진입 시점 = 2주차(14일차, 누적 560)에 해금됩니다.
+// ※ 47일차에 누적 1,880 달성 → 10단계(만렙코코) 도달 및 [탐험 전용] 전환.
+//   이후 탐험은 새싹 포인트(40P)만 소모하며 포만감·체력은 소모되지 않습니다.
 var EXPLORE_DEF = {
   short: {
     name:'모코코 마을 주변 탐험', icon:'🌸',
@@ -599,7 +638,9 @@ var EXPLORE_DEF = {
 };
 
 // 현재 성장 단계에 따라 탐험 구간 자동 결정
-// 1~3: 단거리 / 4~7: 중거리 / 8~10: 장거리
+// 1~3 : 단거리 (1주차 = 7일차, 3단계 완료 시점에 수행)
+// 4~7 : 중거리 (2주차 = 14일차, 4단계 진입 시 해금 ~ 5주차)
+// 8~10: 장거리 (6주차 ~ 47일차 만렙 탐험 전용)
 function getExploreType(){
   if(growthStage>=8) return 'long';
   if(growthStage>=4) return 'mid';
@@ -634,8 +675,17 @@ var state = {
 
 var day=1; var gameStarted=false; var growthStage=0; var pendingStage=0;
 var eventEnded=false; var toastTimer=null; var speechTimer=null;
+var suppressEvolve=false;   // 연출 순서 제어용 — 승급 팝업 일시 보류
 
 function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v));}
+
+// 완주(만렙) 판정 — 친밀도 상한 1,880 도달 시점
+//  · 10단계 "승급"(1,600)과 "완주"(1,880)는 별개 시점입니다.
+//  · 완주 이후 규칙: 먹이기/놀아주기 비활성, 일일 패널티·일일 보상 중단,
+//    일일 SP 지급 유지, 탐험만 활성(스탯 소모 없이 SP만 소모)
+function isCompleted(){
+  return state.affection>=STAGE_MAX;
+}
 
 // ═══════════════════════════════════════════════════
 //  시작 시퀀스
@@ -679,14 +729,24 @@ function waterSeed(){
       setTimeout(function(){
         cw.style.transition='';cw.style.animation='float 2.2s ease-in-out infinite';
         // 0단계(씨앗) → 물주기 1회 완료 시 1단계 즉시 강제 승급 (패널티 미적용)
+        //  ※ 1단계 체류 기간은 0일이며 승급선도 0(=2단계와 동일)입니다.
+        //    따라서 1단계 보상 팝업을 먼저 노출하고, 닫은 뒤 2단계 승급 판정을 진행합니다.
         gameStarted=true;
         growthStage=1;
         state.affection=0;
         state.sp=DAILY_SP;
+        suppressEvolve=true;          // 1단계 보상 노출 전까지 승급 팝업 보류
         enableButtons();render();
+        growthStage=1;                // render()가 2단계로 올려둔 값을 되돌림
+        document.getElementById('affStageBadge').textContent='1단계';
+        var sd0=document.getElementById('stageDisplay');if(sd0)sd0.textContent='1단계';
         showToast('🌱 모코콩이 태어났어요!');
         setTimeout(function(){
-          showRewardPopup('🌟 1단계 달성!', '1단계 성장 보상 지급', '소지품으로 이동', null);
+          showRewardPopup('🌟 1단계 달성!', '1단계 성장 보상 지급', '소지품으로 이동', function(){
+            // 1단계 보상 확인 후 → 1단계 체류 0일 스펙에 따라 2단계 승급 판정
+            suppressEvolve=false;
+            setTimeout(render,300);
+          });
         }, 1200);
       },750);
     });});
@@ -706,8 +766,9 @@ function doAction(type){
   if(!gameStarted||state.exploring)return;
   var act=ACTIONS[type];
 
-  // 10단계(만렙): 먹이기/놀아주기 비활성 — 탐험만 유지
-  if(eventEnded||growthStage>=MAX_STAGE){
+  // 완주(친밀도 1,880) 이후: [먹이기]/[놀아주기] 비활성 — [탐험하기]만 유지
+  //  ※ 만렙 == 10단계 승급 == 친밀도 1,600 도달 시점
+  if(eventEnded||isCompleted()){
     showToast('🌟 만렙코코는 탐험만 떠날 수 있어요!');return;
   }
 
@@ -796,20 +857,31 @@ function startExplore(){
 
   closeExplorePopup();
 
+  // 이번 탐험 "이전"의 완주 여부 — 스탯 소모/일일 보상 판정 기준
+  //  (탐험 +40으로 1,600에 처음 도달하는 회차는 아직 만렙 전이므로 정상 처리)
+  var wasCompleted=isCompleted();
+
   state.sp=Math.max(0,state.sp-EXPLORE_SP);
   state.spUsedToday+=EXPLORE_SP;
   state.weeklyExplore--;
   state.exploring=true;
   state.exploreType=type;
-  state.hunger=clamp(state.hunger+def.hunger,0,STAT_MAX);
-  state.health=clamp(state.health+def.health,0,STAT_MAX);
+
+  // 완주(1,880) 이후 탐험: 새싹 포인트만 소모하고 포만감/체력 소모는 미적용
+  //  → 회복 수단(먹이기)이 비활성인 상태에서 체력이 고갈되는 교착을 방지
+  if(!wasCompleted){
+    state.hunger=clamp(state.hunger+def.hunger,0,STAT_MAX);
+    state.health=clamp(state.health+def.health,0,STAT_MAX);
+  }
   state.affection=clamp(state.affection+40,0,STAGE_MAX);
 
   lockSidebar(true);render();
   hideSpeechBubble();
 
   // 순서: 일일 보상(조건 충족 시) → 탐험 연출 → 탐험 보상
-  var dailyGiftTriggered=(state.spUsedToday>=DAILY_GIFT_SP&&!state.giftGiven);
+  // 완주(1,880) 이후에는 일일 보상 획득 불가 (탐험 보상만 지급)
+  //  ※ 소모 시점 판정 — 이번 탐험으로 1,600에 도달한 경우에도 당일 보상은 유지
+  var dailyGiftTriggered=(!wasCompleted&&state.spUsedToday>=DAILY_GIFT_SP&&!state.giftGiven);
   if(dailyGiftTriggered) state.giftGiven=true;
 
   function runExplore(){
@@ -900,7 +972,7 @@ function showRewardPopup(title,items,sub,cb){
 }
 
 function showDailyGift(){
-  if(growthStage>=MAX_STAGE)return;   // 만렙: 일일 보상 중단
+  if(isCompleted())return;   // 완주(1,880) 이후: 일일 보상 중단
   showRewardPopup('새싹 일일 보상 획득','당일 새싹 포인트 40P 소모 보상 지급','소지품으로 지급',null);
 }
 
@@ -925,7 +997,9 @@ function doEvolve(){
     // 연출 후 단계 보상 팝업
     var info=STAGE_INFO[newStage];
     if(info&&info.reward){
-      showRewardPopup('🌟 '+newStage+'단계 달성!', info.reward, '소지품으로 이동', null);
+      // 10단계 승급(누적 1,880) = 완주 시점이므로, 단계 보상 확인 직후
+      // checkCompletion()이 이벤트 종료(탐험 전용 전환)를 수행합니다.
+      showRewardPopup('🌟 '+newStage+'단계 달성!', info.reward, '소지품으로 이동', checkCompletion);
     }
   });
 }
@@ -945,29 +1019,42 @@ function playEvolution(newStage,cb){
         banner.classList.remove('show');
         cw.classList.remove('char-evolving');
         growthStage=newStage; // 이제 단계 확정 적용
+        // 승급 직후 render()에서 완주 팝업이 끼어들지 않도록 잠시 보류
+        //  → 단계 보상 팝업(cb)을 먼저 노출한 뒤 완주 판정을 수행
+        suppressEvolve=true;
         render();
+        suppressEvolve=false;
         showToast(newStage+'단계로 성장했어요! 🌱');
-        if(newStage===MAX_STAGE&&!eventEnded){
-          eventEnded=true;
-          setTimeout(function(){
-            showRewardPopup('🌟 만렙코코 달성!',
-              '모코코가 완전히 성장했어요!',
-              '10단계 성장 보상 지급',
-              function(){applyEventEnd();});
-          },500);
-        } else {
-          if(cb)setTimeout(cb,400);
-        }
+        // 10단계 승급(누적 1,880) = 완주 이므로, 이어지는 checkCompletion()이
+        // 이벤트 종료(탐험 전용)를 수행합니다.
+        if(cb)setTimeout(cb,400);
+        setTimeout(checkCompletion,900);
       },800);
     },600);
   },400);
 }
 
+// 완주 판정 — 친밀도 1,880 도달 시 1회만 이벤트 종료 처리
+//  · 10단계 승급(1,600) 직후가 아니라, 10단계 구간 280을 모두 채운 시점에 동작합니다.
+function checkCompletion(){
+  if(eventEnded||!isCompleted()||growthStage<MAX_STAGE)return;
+  eventEnded=true;
+  showRewardPopup('🌟 만렙코코 달성!',
+    '모코코가 완전히 성장했어요! (누적 친밀도 1,880)',
+    '최종 완주 보상 지급',
+    function(){applyEventEnd();});
+}
+
 function applyEventEnd(){
-  // 만렙: 먹이기/놀아주기 비활성, 일일 패널티·일일 보상 중단, [탐험하기]만 유지
+  // 완주(친밀도 1,880) 이후 규칙:
+  //  · 일일 SP 지급        : 유지 (nextDay)
+  //  · 일일 갱신 패널티    : 미적용 (nextDay)
+  //  · [먹이기]/[놀아주기] : 비활성 (doAction / updateActionButtons)
+  //  · 일일 보상 획득      : 불가 (showDailyGift / showDailyGiftThen)
+  //  · [탐험하기]          : 활성 유지 + 탐험 보상 획득 가능 (SP만 소모)
   document.getElementById('btn-feed').classList.add('disabled');
   document.getElementById('btn-play').classList.add('disabled');
-  render();
+  render();updateActionButtons();
   showToast('만렙코코와 함께 탐험을 떠나요 🌟');
 }
 
@@ -1000,8 +1087,11 @@ function hideSpeechBubble(){
 function updateActionButtons(){
   if(!gameStarted)return;
 
-  // 10단계(만렙): 먹이기/놀아주기 비활성, [탐험하기]만 유지
-  if(growthStage>=MAX_STAGE){
+  // 완주(친밀도 1,880) 이후: [먹이기]/[놀아주기] 비활성, [탐험하기]만 활성 유지
+  //  · 일일 SP는 계속 지급되므로 탐험 비용(40P)은 항상 확보됨
+  //  · 일일 패널티가 중단되어 체력이 자연 감소하지 않음
+  //  ※ 1,880 미달(9단계 이하) 구간에서는 모든 버튼이 정상 동작
+  if(isCompleted()){
     document.getElementById('btn-feed').classList.add('disabled');
     document.getElementById('btn-play').classList.add('disabled');
     document.getElementById('btn-explore').classList.toggle('disabled',
@@ -1048,22 +1138,22 @@ function nextDay(){
   }
 
   // 일일 갱신 패널티 (매일 06:00 최초 진입 시)
-  // 예외: 0단계(씨앗) 및 10단계(만렙)에서는 미적용
-  if(growthStage>=1&&growthStage<MAX_STAGE){
+  // 예외: 0단계(씨앗) 및 완주(친밀도 1,880) 이후에는 미적용
+  if(growthStage>=1&&!isCompleted()){
     state.hunger=clamp(state.hunger-DAILY_PEN_HUNGER,0,STAT_MAX);
     state.health=clamp(state.health-DAILY_PEN_HEALTH,0,STAT_MAX);
   }
 
   // 일일 SP 지급 (미사용 포인트는 상한 없이 누적/이월)
-  // 만렙 달성 시 일일 보상 중단
-  if(growthStage<MAX_STAGE)state.sp+=DAILY_SP;
+  // 완주 이후에도 계속 지급 → 탐험 비용(40P) 상시 확보
+  state.sp+=DAILY_SP;
   state.spUsedToday=0;
   state.giftGiven=false;
   state.feedUsedToday=false;   // 먹이기 일 1회 제한 초기화
 
   popEl('nextBtn');render();updateRedDot();
   if(!state.exploring)showToast('DAY '+day+' 시작!');
-  if(growthStage>=1&&growthStage<MAX_STAGE&&state.health<=0){
+  if(growthStage>=1&&!isCompleted()&&state.health<=0){
     setTimeout(function(){showToast('⚠️ 체력이 없어요! 먹이기로 회복해주세요!');},1600);
   }
 }
@@ -1091,6 +1181,9 @@ function render(){
   document.getElementById('numAff').textContent=state.affection;
 
   // 성장 단계 계산 (1단계=물주기 후, 이후 누적 친밀도 기반)
+  //  ※ STAGE_THR[1]===0 이므로 아래 역순 탐색은 친밀도 0에서 1단계를 반환합니다.
+  //    이는 "1단계는 물주기 실행 시 1일차 시작 즉시 달성" 스펙을 그대로 구현한 것입니다.
+  //    이후 80을 쌓으면 2단계로 승급합니다.
   var aff=state.affection;
   var cs=1;
   for(var s=MAX_STAGE;s>=1;s--){
@@ -1104,16 +1197,20 @@ function render(){
   var sd=document.getElementById('stageDisplay');if(sd)sd.textContent=cs+'단계';
 
   // 단계 상승 감지 → 성장 가능 팝업 표시 (아직 growthStage는 변경 전 유지)
-  if(gameStarted&&prevStage>0&&cs>prevStage){
+  if(gameStarted&&prevStage>0&&cs>prevStage&&!suppressEvolve){
     growthStage=prevStage; // 팝업 닫고 성장하기 누를 때까지 이전 단계 유지
     pendingStage=cs;       // 도달할 단계 저장
     setTimeout(function(){ showEvolveReady(cs); },400);
+  } else if(gameStarted&&!suppressEvolve&&cs>=MAX_STAGE){
+    // 10단계 도달 = 완주(1,880) → 보정 판정 (승급 연출을 건너뛴 경우 대비)
+    setTimeout(checkCompletion,600);
   }
 
   // 하트 5개 — 현재 단계 내 진행도
+  //  10단계는 달성 = 완주(1,880)이므로 진행도가 100%로 표시됩니다.
   var stS=STAGE_THR[cs]||0;
   var stE=(cs>=MAX_STAGE)?STAGE_MAX:(STAGE_THR[cs+1]||STAGE_MAX);
-  var prog=cs>=MAX_STAGE?1.0:Math.min(1.0,Math.max(0,(aff-stS)/(stE-stS)));
+  var prog=(stE>stS)?Math.min(1.0,Math.max(0,(aff-stS)/(stE-stS))):1.0;
   for(var h=0;h<5;h++){
     var hPct=0;
     if(prog>=(h+1)/5)hPct=100;
@@ -1135,7 +1232,7 @@ function resetGame(){
     exploring:false,exploreType:null,giftGiven:false,feedUsedToday:false,
     weeklyExplore:1,weekDay:1,weeklyExploreNoticed:false,boxObtained:[]};
   day=1;gameStarted=false;growthStage=0;eventEnded=false;
-  toastTimer=null;speechTimer=null;
+  toastTimer=null;speechTimer=null;suppressEvolve=false;
 
   var DAY_NAMES=['수','목','금','토','일','월','화'];
   document.getElementById('dayDisplay').textContent='DAY 1 ('+DAY_NAMES[0]+')';
