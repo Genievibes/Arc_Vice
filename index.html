@@ -375,20 +375,20 @@
             <div class="menu-item disabled" id="btn-feed" onclick="doAction('feed')">
               <div class="menu-icon">🍎</div><div class="menu-label">먹이기</div>
               <div class="stat-preview">
-                <div class="sp-row">🌱 SP -20</div>
-                <div class="preview-row pv-up"><span class="pv-icon">🍖</span>포만감 <span class="pv-val">+20</span></div>
-                <div class="preview-row pv-up"><span class="pv-icon">💪</span>체력 <span class="pv-val">+25</span></div>
-                <div class="preview-row pv-up"><span class="pv-icon">🩷</span>친밀도 <span class="pv-val">+15</span></div>
+                <div class="sp-row">🌱 SP -30 · 일 1회</div>
+                <div class="preview-row pv-up"><span class="pv-icon">🍖</span>포만감 <span class="pv-val">+30</span></div>
+                <div class="preview-row pv-up"><span class="pv-icon">💪</span>체력 <span class="pv-val">+35</span></div>
+                <div class="preview-row pv-up"><span class="pv-icon">🩷</span>친밀도 <span class="pv-val">+20</span></div>
               </div>
             </div>
             <div class="menu-divider"></div>
             <div class="menu-item disabled" id="btn-play" onclick="doAction('play')">
               <div class="menu-icon">🎮</div><div class="menu-label">놀아주기</div>
               <div class="stat-preview">
-                <div class="sp-row">🌱 SP -20</div>
+                <div class="sp-row">🌱 SP -10 · 제한 없음</div>
                 <div class="preview-row pv-down"><span class="pv-icon">🍖</span>포만감 <span class="pv-val">-10</span></div>
-                <div class="preview-row pv-down"><span class="pv-icon">💪</span>체력 <span class="pv-val">-20</span></div>
-                <div class="preview-row pv-up"><span class="pv-icon">🩷</span>친밀도 <span class="pv-val">+40</span></div>
+                <div class="preview-row pv-down"><span class="pv-icon">💪</span>체력 <span class="pv-val">-15</span></div>
+                <div class="preview-row pv-up"><span class="pv-icon">🩷</span>친밀도 <span class="pv-val">+20</span></div>
               </div>
             </div>
             <div class="menu-divider"></div>
@@ -484,30 +484,51 @@
 // ═══════════════════════════════════════════════════
 //  스펙 상수
 // ═══════════════════════════════════════════════════
-var DAILY_SP       = 40;   // 일일 획득 SP
-var EXPLORE_SP     = 40;   // 탐험 SP 소모
-var DAILY_USE_LIMIT= 40;   // 하루 사용 제한 (일일 보상 달성 후 해제)
-var DAILY_GIFT_SP  = 40;   // 일일 보상 기준 사용량
-var STAGE_MAX      = 3190; // 10단계 달성 누적 친밀도
+var DAILY_SP        = 40;   // 일일 미션 획득 SP (일 최대 40P)
+var EXPLORE_SP      = 40;   // 탐험 SP 소모
+var DAILY_GIFT_SP   = 40;   // 일일 보상 기준 누적 사용량 (당일 40P 소모 시 지급)
+var STAGE_MAX       = 1840; // 친밀도 최대치 (8주차 완주 타임라인 반영 조정 수치)
+var HUNGER_INIT     = 50;   // 포만감 초기값
+var HEALTH_INIT     = 50;   // 체력 초기값
+var STAT_MAX        = 100;  // 포만감/체력 최대값 (상한선 Cap, 초과 회복량은 버림)
+var DAILY_PEN_HUNGER= 10;   // 일일 갱신 포만감 차감
+var DAILY_PEN_HEALTH= 5;    // 일일 갱신 체력 차감
+var MAX_STAGE       = 10;   // 최종 만렙 단계
 
-// 상호작용 (스펙 기준)
-// 일일 먹이기1 + 놀아주기1 = 친밀도 +55 (15+40)
+// 상호작용 (기획서 3. 상호작용 연산 규칙)
+// 먹이기: 일 1회 제한 / 놀아주기: 제한 없음
+// 포만감·체력은 clamp(0, STAT_MAX)로 처리되어 100 초과 회복량은 버려짐
 var ACTIONS = {
-  feed: { sp:20, hunger:+20, health:+25, affection:+15, label:'🍎 냠냠!' },
-  play: { sp:20, hunger:-10, health:-20, affection:+40, label:'🎮 신난다!' }
+  feed: { sp:30, hunger:+30, health:+35, affection:+20, label:'🍎 냠냠!', dailyOnce:true },
+  play: { sp:10, hunger:-10, health:-15, affection:+20, label:'🎮 신난다!', dailyOnce:false }
 };
 
-// 성장 단계 누적 친밀도 (0→1 즉시, 이후 기준값)
+// 성장 단계 누적 친밀도 (기획서 4. 캐릭터 성장 단계 및 필요 친밀도 구조)
+// 0단계는 물주기 튜토리얼 → 1단계 강제 승급 (누적 0)
+// 1~5단계: 빠른 성장 / 6~9단계: 주 1회 레벨업
+// ※ STAGE_THR[10] = 10단계로 "승급"하는 누적 친밀도 (= 필요 친밀도 총합 1,700)
+//   STAGE_MAX = 1,840 은 친밀도 상한(최종 완주 수치)으로, 만렙 승급 후
+//   추가 140(≈3.5일)을 더 쌓아 8주차 완주 타임라인을 충족시킵니다.
 var STAGE_THR = {
-  1:0, 2:275, 3:550, 4:880, 5:1210,
-  6:1540, 7:1925, 8:2310, 9:2695, 10:3190
+  1:0, 2:100, 3:200, 4:340, 5:480,
+  6:660, 7:900, 8:1140, 9:1420, 10:1700
 };
 
-// 단계별 명칭
+// 각 단계에서 다음 단계로 승급하는 데 필요한 친밀도 (구간 폭)
+// 누적 임계값(STAGE_THR)에서 자동 도출 → 두 표가 어긋날 수 없음
+// 도출 결과: 100/100/140/140/180/240/240/280/280 (기획서 기재값과 일치)
+var STAGE_NEED = (function(){
+  var need={};
+  for(var s=1;s<MAX_STAGE;s++) need[s]=STAGE_THR[s+1]-STAGE_THR[s];
+  need[MAX_STAGE]=0;   // 만렙: 추가 성장 없음
+  return need;
+})();
+
+// 단계별 명칭 (1~3 모코콩 / 4~10 모코코)
 var STAGE_NAMES = {
   0:'모코코 씨앗',1:'모코콩 Lv.1',2:'모코콩 Lv.2',3:'모코콩 Lv.3',
-  4:'모코콩 Lv.4',5:'모코콩 Lv.5',6:'모코콩 Lv.6',7:'모코콩 Lv.7',
-  8:'모코콩 Lv.8',9:'모코콩 Lv.9',10:'완성된 모코콩'
+  4:'모코코 Lv.4',5:'모코코 Lv.5',6:'모코코 Lv.6',7:'모코코 Lv.7',
+  8:'모코코 Lv.8',9:'모코코 Lv.9',10:'만렙코코'
 };
 
 // 단계별 보상 문구
@@ -521,19 +542,28 @@ var STAGE_INFO = {
   7:  { reward:'7단계 성장 보상 지급' },
   8:  { reward:'8단계 성장 보상 지급' },
   9:  { reward:'9단계 성장 보상 지급' },
-  10: { reward:'최종 완성! 대박 보상 지급' }
+  10: { reward:'만렙코코 달성! 최종 성장 보상 지급' }
 };
 
-// 탐험 구간 — 성장 단계에 따라 자동 결정
-// 1~3단계: 단거리(모코코 마을 주변)
-// 4~6단계: 중거리(바다향기 숲)
-// 7~10단계: 장거리(미지의 바다)
+// 미지의 상자 구성품 (D) — 총 6종, 중복 없이 랜덤 지급
+// 전량 획득 시 리셋 전까지 기본 확정 보상만 지급
+var MYSTERY_BOX_POOL = [
+  '미지의 상자 : 카드 팩',
+  '미지의 상자 : 재련 재료 상자',
+  '미지의 상자 : 아바타 선택권',
+  '미지의 상자 : 보석 주머니',
+  '미지의 상자 : 실링 주머니',
+  '미지의 상자 : 각인서 주머니'
+];
+
+// 탐험 구간 — 성장 단계에 따라 자동 결정 (기획서 5. 탐험 보상)
+// 1~3단계: 단거리(A) / 4~7단계: 중거리(B+D) / 8~10단계: 장거리(C+D)
 var EXPLORE_DEF = {
   short: {
     name:'모코코 마을 주변 탐험', icon:'🌸',
     stageMin:1, stageMax:3,
-    hunger:-10, health:-10,
-    reward:'탐험 보따리 A',
+    hunger:-25, health:-30,
+    reward:'단거리 확정 보상 (A)', base:'단거리 확정 보상 (A)', box:false,
     depart:[
       '🌸 모코콩이 마을 주변을 탐험해요!',
       '익숙한 길이지만 언제나 설레요',
@@ -543,9 +573,9 @@ var EXPLORE_DEF = {
   },
   mid: {
     name:'바다향기 숲 탐험', icon:'🏕️',
-    stageMin:4, stageMax:6,
-    hunger:-20, health:-25,
-    reward:'탐험 보따리 B + 미지의 상자',
+    stageMin:4, stageMax:7,
+    hunger:-25, health:-30,
+    reward:'중거리 확정 보상 (B) + 미지의 상자', base:'중거리 확정 보상 (B)', box:true,
     depart:[
       '🏕️ 모코콩이 바다향기 숲으로 떠났어요!',
       '숲 어딘가에서 이상한 냄새가 나는데… 🔍',
@@ -555,9 +585,9 @@ var EXPLORE_DEF = {
   },
   long: {
     name:'미지의 바다 탐험', icon:'⚡',
-    stageMin:7, stageMax:10,
-    hunger:-35, health:-45,
-    reward:'탐험 보따리 C + 미지의 상자',
+    stageMin:8, stageMax:10,
+    hunger:-25, health:-30,
+    reward:'장거리 확정 보상 (C) + 미지의 상자', base:'장거리 확정 보상 (C)', box:true,
     depart:[
       '⚡ 모코콩이 미지의 바다로 떠났어요!',
       '강한 기운이 느껴집니다…',
@@ -569,39 +599,37 @@ var EXPLORE_DEF = {
 };
 
 // 현재 성장 단계에 따라 탐험 구간 자동 결정
+// 1~3: 단거리 / 4~7: 중거리 / 8~10: 장거리
 function getExploreType(){
-  if(growthStage>=7) return 'long';
+  if(growthStage>=8) return 'long';
   if(growthStage>=4) return 'mid';
   return 'short';
 }
 
-// 탐험 결과 (성장 단계 기반 확률)
-var EXPLORE_RESULTS = [
-  { grade:'탐험 보상', emoji:'🌟',
-    log:'🌟 모코콩이 기적 같은 걸 발견해왔어요!', text:'스탬프 1개 + 명예 보상!',
-    apply:function(type){ state.health=clamp(state.health+20,0,100); state.sp+=20; }},
-  { grade:'탐험 보상',   emoji:'✨',
-    log:'✨ 모코콩이 좋은 것을 가져왔어요!',     text:'스탬프 1개 + 재련 재료',
-    apply:function(type){ state.sp+=10; }},
-  { grade:'탐험 보상',   emoji:'🎒',
-    log:'🎒 모코콩이 소소한 발견을 해왔어요',    text:'스탬프 1개',
-    apply:function(type){ state.hunger=clamp(state.hunger+10,0,100); }}
-];
-
-var EXPLORE_PROB = {
-  1:[90,9,1],2:[90,9,1],3:[88,10,2],4:[80,17,3],5:[78,18,4],
-  6:[70,24,6],7:[60,33,7],8:[55,35,10],9:[48,40,12],10:[40,45,15]
-};
+// 미지의 상자 추첨 — 미획득 구성품 중 랜덤 1개 (중복 없음)
+// 모두 획득한 경우 null 반환 → 기본 확정 보상만 지급
+function drawMysteryBox(){
+  var remain=[];
+  for(var i=0;i<MYSTERY_BOX_POOL.length;i++){
+    if(state.boxObtained.indexOf(i)===-1) remain.push(i);
+  }
+  if(remain.length===0) return null;
+  var pick=remain[Math.floor(Math.random()*remain.length)];
+  state.boxObtained.push(pick);
+  return MYSTERY_BOX_POOL[pick];
+}
 
 // 게임 상태
 var state = {
   sp:0, spUsedToday:0,
-  hunger:50, health:50,
+  hunger:HUNGER_INIT, health:HEALTH_INIT,
   affection:0,
   exploring:false, exploreType:null,
   giftGiven:false,
+  feedUsedToday:false,          // 먹이기 일 1회 제한
   weeklyExplore:1, weekDay:1,
-  weeklyExploreNoticed:false
+  weeklyExploreNoticed:false,
+  boxObtained:[]                // 획득한 미지의 상자 구성품 index
 };
 
 var day=1; var gameStarted=false; var growthStage=0; var pendingStage=0;
@@ -650,7 +678,7 @@ function waterSeed(){
       cw.style.transform='translateX(-50%) scale(1)';cw.style.filter='brightness(1)';cw.style.opacity='1';
       setTimeout(function(){
         cw.style.transition='';cw.style.animation='float 2.2s ease-in-out infinite';
-        // 0→1단계 즉시 진화 (첫날 허들 제로)
+        // 0단계(씨앗) → 물주기 1회 완료 시 1단계 즉시 강제 승급 (패널티 미적용)
         gameStarted=true;
         growthStage=1;
         state.affection=0;
@@ -678,27 +706,33 @@ function doAction(type){
   if(!gameStarted||state.exploring)return;
   var act=ACTIONS[type];
 
-  // 이벤트 종료 후: 연출만 허용 (스탯 변화 없음)
-  if(eventEnded){showToast(act.label);return;}
-
-  if(state.sp<act.sp){shakeEl('spFill');showToast('새싹 포인트 부족!');return;}
-
-  // 일일 사용 한도 체크 (보상 달성 전까지)
-  if(state.spUsedToday<DAILY_USE_LIMIT && state.spUsedToday+act.sp>DAILY_USE_LIMIT){
-    showToast('오늘 포인트 사용 한도(40P)를 초과해요!');return;
+  // 10단계(만렙): 먹이기/놀아주기 비활성 — 탐험만 유지
+  if(eventEnded||growthStage>=MAX_STAGE){
+    showToast('🌟 만렙코코는 탐험만 떠날 수 있어요!');return;
   }
 
-  // 체력 0이면 모든 상호작용 불가 (하드락)
-  if(state.health<=0){showToast('⚠️ 체력이 없어요! 모코콩이 쓰러졌어요!');return;}
+  // 먹이기 일 1회 제한
+  if(act.dailyOnce&&state.feedUsedToday){
+    showToast('먹이기는 하루 1번만 가능해요!');return;
+  }
+
+  if(state.sp<act.sp){shakeEl('spFill');showToast('새싹 포인트 부족! (필요: '+act.sp+'P)');return;}
+
+  // 체력 0 → [놀아주기]/[탐험하기] 비활성. 먹이기로만 회복 가능
+  if(state.health<=0&&act.health<0){
+    showToast('⚠️ 체력이 없어요! 먹이기로 회복해주세요!');return;
+  }
 
   state.sp=Math.max(0,state.sp-act.sp);
   state.spUsedToday+=act.sp;
-  state.hunger=clamp(state.hunger+act.hunger,0,100);
-  state.health=clamp(state.health+act.health,0,100);
+  if(act.dailyOnce)state.feedUsedToday=true;
+  state.hunger=clamp(state.hunger+act.hunger,0,STAT_MAX);
+  state.health=clamp(state.health+act.health,0,STAT_MAX);
   state.affection=clamp(state.affection+act.affection,0,STAGE_MAX);
 
   render();showToast(act.label);
 
+  // 일일 보상: 당일 새싹 포인트 누적 40P 소모 시 지급
   if(state.spUsedToday>=DAILY_GIFT_SP&&!state.giftGiven){
     state.giftGiven=true;
     setTimeout(showDailyGift,600);
@@ -709,10 +743,11 @@ function doAction(type){
 //  탐험
 // ═══════════════════════════════════════════════════
 function openExplorePopup(){
-  if(!gameStarted||eventEnded)return;
+  if(!gameStarted)return;   // 만렙에서도 탐험은 유지
   if(state.exploring){showToast('이미 탐험 중이에요!');return;}
   if(state.weeklyExplore<=0){showToast('이번 주 탐험 횟수를 모두 사용했어요!');return;}
   if(state.health<=0){showToast('⚠️ 체력이 없어 탐험할 수 없어요!');return;}
+  if(state.sp<EXPLORE_SP){shakeEl('spFill');showToast('새싹 포인트 부족! (필요: 40P)');return;}
 
   // 주간 최초 안내 팝업
   if(!state.weeklyExploreNoticed){
@@ -735,6 +770,7 @@ function openExploreMain(){
     '<div class="ep-info-row"><span class="ep-info-label">탐험지</span><span class="ep-info-val">'+def.name+'</span></div>'+
     '<div class="ep-info-row"><span class="ep-info-label">포만감 소모</span><span class="ep-info-val">'+def.hunger+'</span></div>'+
     '<div class="ep-info-row"><span class="ep-info-label">체력 소모</span><span class="ep-info-val">'+def.health+'</span></div>'+
+    '<div class="ep-info-row"><span class="ep-info-label">친밀도</span><span class="ep-info-val">+40</span></div>'+
     '<div class="ep-info-row"><span class="ep-info-label">새싹 포인트</span><span class="ep-info-val">-40 P</span></div>'+
     '<div class="ep-info-reward">🎁 보상: '+def.reward+'</div>';
 
@@ -752,14 +788,11 @@ function cancelExploreNotice(){document.getElementById('exploreNotice').classLis
 
 function startExplore(){
   var type=getExploreType();
-  if(!gameStarted||eventEnded||state.exploring)return;
+  if(!gameStarted||state.exploring)return;   // 만렙에서도 탐험은 유지
   if(state.weeklyExplore<=0||state.health<=0)return;
   var def=EXPLORE_DEF[type];
   // SP 40 소모 체크
   if(state.sp<EXPLORE_SP){showToast('새싹 포인트 부족! (필요: 40P)');return;}
-  if(state.spUsedToday<DAILY_USE_LIMIT && state.spUsedToday+EXPLORE_SP>DAILY_USE_LIMIT){
-    showToast('오늘 포인트 사용 한도(40P)를 초과해요!');return;
-  }
 
   closeExplorePopup();
 
@@ -768,9 +801,9 @@ function startExplore(){
   state.weeklyExplore--;
   state.exploring=true;
   state.exploreType=type;
-  state.hunger=clamp(state.hunger+def.hunger,0,100);
-  state.health=clamp(state.health+def.health,0,100);
-  state.affection=clamp(state.affection+30,0,STAGE_MAX);
+  state.hunger=clamp(state.hunger+def.hunger,0,STAT_MAX);
+  state.health=clamp(state.health+def.health,0,STAT_MAX);
+  state.affection=clamp(state.affection+40,0,STAGE_MAX);
 
   lockSidebar(true);render();
   hideSpeechBubble();
@@ -818,23 +851,24 @@ function showDailyGiftThen(cb){
   };
 }
 
-function pickExploreResult(){
-  var stage=Math.min(10,Math.max(1,growthStage));
-  var probs=EXPLORE_PROB[stage]||EXPLORE_PROB[1];
-  var rand=Math.random()*100,cum=0;
-  for(var i=0;i<3;i++){cum+=probs[i];if(rand<cum)return EXPLORE_RESULTS[[2,1,0][i]];}
-  return EXPLORE_RESULTS[2];
-}
-
 function giveExploreReward(){
   var type=state.exploreType||'short';
   var def=EXPLORE_DEF[type];
-  var reward=pickExploreResult();
+
+  // 기본 확정 보상 (A/B/C) + 중·장거리는 미지의 상자 (D)
+  var boxItem=def.box?drawMysteryBox():null;
+  var rewardText=def.base+(boxItem?String.fromCharCode(10)+'+ '+boxItem:'');
+  var boxAllDone=def.box&&boxItem===null;
+
   var ret=document.getElementById('exploreReturn');
   ret.classList.remove('hidden');
   var logEl=document.getElementById('returnLog');
   logEl.textContent='';
-  var logs=def.returnIntro.concat(['','잠시 후 결과를 확인해요…','','',reward.log,'','[ '+reward.grade+' ]',def.reward]);
+
+  var logs=def.returnIntro.concat(['','잠시 후 결과를 확인해요…','','','🎁 모코콩이 보물을 가져왔어요!','','[ 탐험 확정 보상 ]',def.base]);
+  if(boxItem)logs=logs.concat(['','📦 '+boxItem]);
+  else if(boxAllDone)logs=logs.concat(['','📦 미지의 상자를 모두 모았어요!','(리셋 전까지 확정 보상만 지급)']);
+
   var i=0;
   function showNext(){
     if(i<logs.length){
@@ -843,8 +877,8 @@ function giveExploreReward(){
     } else {
       setTimeout(function(){
         ret.classList.add('hidden');
-        reward.apply(type);render();
-        showRewardPopup(reward.emoji+' '+reward.grade, def.reward, '소지품으로 이동', function(){
+        render();
+        showRewardPopup('🎁 탐험 보상 획득', rewardText, '소지품으로 이동', function(){
           state.exploring=false;state.exploreType=null;lockSidebar(false);render();
         });
       },800);
@@ -866,8 +900,8 @@ function showRewardPopup(title,items,sub,cb){
 }
 
 function showDailyGift(){
-  if(eventEnded)return;
-  showRewardPopup('새싹 일일 보상 획득','새싹 포인트 40P 사용으로 인한 보상 지급','소지품으로 지급',null);
+  if(growthStage>=MAX_STAGE)return;   // 만렙: 일일 보상 중단
+  showRewardPopup('새싹 일일 보상 획득','당일 새싹 포인트 40P 소모 보상 지급','소지품으로 지급',null);
 }
 
 // ═══════════════════════════════════════════════════
@@ -913,12 +947,12 @@ function playEvolution(newStage,cb){
         growthStage=newStage; // 이제 단계 확정 적용
         render();
         showToast(newStage+'단계로 성장했어요! 🌱');
-        if(newStage===10&&!eventEnded){
+        if(newStage===MAX_STAGE&&!eventEnded){
           eventEnded=true;
           setTimeout(function(){
-            showRewardPopup('🌟 최종 완성!',
-              '모코콩이 완전히 성장했어요!',
-              '졸업 공인 증서 & 만렙 보상 지급',
+            showRewardPopup('🌟 만렙코코 달성!',
+              '모코코가 완전히 성장했어요!',
+              '10단계 성장 보상 지급',
               function(){applyEventEnd();});
           },500);
         } else {
@@ -930,8 +964,11 @@ function playEvolution(newStage,cb){
 }
 
 function applyEventEnd(){
-  document.getElementById('btn-explore').classList.add('disabled');
-  showToast('완성된 모코콩과 함께해요 🌟');
+  // 만렙: 먹이기/놀아주기 비활성, 일일 패널티·일일 보상 중단, [탐험하기]만 유지
+  document.getElementById('btn-feed').classList.add('disabled');
+  document.getElementById('btn-play').classList.add('disabled');
+  render();
+  showToast('만렙코코와 함께 탐험을 떠나요 🌟');
 }
 
 // ═══════════════════════════════════════════════════
@@ -939,7 +976,7 @@ function applyEventEnd(){
 // ═══════════════════════════════════════════════════
 function updateRedDot(){
   var isTue=(state.weekDay===7); // 화요일
-  var eligible=gameStarted&&!eventEnded&&isTue&&state.weeklyExplore>=1&&!state.exploring;
+  var eligible=gameStarted&&isTue&&state.weeklyExplore>=1&&!state.exploring;
   var dot=document.getElementById('redDot');
   if(dot)dot.classList.toggle('show',eligible);
   var bubble=document.getElementById('speechBubble');
@@ -962,29 +999,30 @@ function hideSpeechBubble(){
 // ═══════════════════════════════════════════════════
 function updateActionButtons(){
   if(!gameStarted)return;
-  if(eventEnded){
-    // 이벤트 종료: 먹이기/놀아주기 연출만, 탐험 비활성
-    document.getElementById('btn-feed').classList.remove('disabled');
-    document.getElementById('btn-play').classList.remove('disabled');
-    document.getElementById('btn-explore').classList.add('disabled');
+
+  // 10단계(만렙): 먹이기/놀아주기 비활성, [탐험하기]만 유지
+  if(growthStage>=MAX_STAGE){
+    document.getElementById('btn-feed').classList.add('disabled');
+    document.getElementById('btn-play').classList.add('disabled');
+    document.getElementById('btn-explore').classList.toggle('disabled',
+      state.weeklyExplore<=0||state.exploring||state.sp<EXPLORE_SP||state.health<=0);
     return;
   }
-  // 체력 0 = 하드락 (모든 상호작용 불가)
-  var hardLock=(state.health<=0);
-  if(hardLock){
-    ['feed','play','explore'].forEach(function(id){
-      document.getElementById('btn-'+id).classList.add('disabled');
-    });
-    return;
-  }
-  var limitReached=state.spUsedToday>=DAILY_USE_LIMIT;
-  var canUse20=state.sp>=20&&(limitReached||state.spUsedToday+20<=DAILY_USE_LIMIT);
-  document.getElementById('btn-feed').classList.toggle('disabled',!canUse20);
-  document.getElementById('btn-play').classList.toggle('disabled',!canUse20);
-  var limitReachedEx=state.spUsedToday>=DAILY_USE_LIMIT;
-  var canExplore=state.sp>=EXPLORE_SP&&(limitReachedEx||state.spUsedToday+EXPLORE_SP<=DAILY_USE_LIMIT);
-  document.getElementById('btn-explore').classList.toggle('disabled',
-    state.weeklyExplore<=0||state.exploring||!canExplore);
+
+  // 먹이기: SP 30 + 일 1회 제한
+  var canFeed=state.sp>=ACTIONS.feed.sp&&!state.feedUsedToday;
+  document.getElementById('btn-feed').classList.toggle('disabled',!canFeed);
+
+  // 체력 0 → [놀아주기]/[탐험하기] 즉시 비활성 (체력 1 이상 복구 시 해제)
+  var noHealth=(state.health<=0);
+
+  // 놀아주기: SP 10 / 제한 없음
+  var canPlay=state.sp>=ACTIONS.play.sp&&!noHealth;
+  document.getElementById('btn-play').classList.toggle('disabled',!canPlay);
+
+  // 탐험: SP 40 / 주간 1회
+  var canExplore=state.sp>=EXPLORE_SP&&!noHealth&&state.weeklyExplore>0&&!state.exploring;
+  document.getElementById('btn-explore').classList.toggle('disabled',!canExplore);
 }
 function lockSidebar(lock){
   ['feed','play','explore'].forEach(function(id){
@@ -1002,28 +1040,31 @@ function nextDay(){
   var DAY_NAMES=['수','목','금','토','일','월','화'];
   document.getElementById('dayDisplay').textContent='DAY '+day+' ('+DAY_NAMES[state.weekDay-1]+')';
 
-  // 주간 리셋 (수요일 = weekDay 1)
+  // 주간 리셋 (매주 정기점검 = 수요일, weekDay 1) — 탐험 주간 1회 초기화
   if(state.weekDay===1){
     state.weeklyExplore=1;
     state.weeklyExploreNoticed=false;
-    setTimeout(function(){showToast('수요일 점검! 탐험 횟수 초기화 🗺️');},600);
+    setTimeout(function(){showToast('정기점검! 탐험 횟수 초기화 🗺️');},600);
   }
 
-  // 일일 패널티 (1단계 이상)
-  if(growthStage>=1){
-    state.hunger=clamp(state.hunger-10,0,100);
-    state.health=clamp(state.health-5,0,100);
+  // 일일 갱신 패널티 (매일 06:00 최초 진입 시)
+  // 예외: 0단계(씨앗) 및 10단계(만렙)에서는 미적용
+  if(growthStage>=1&&growthStage<MAX_STAGE){
+    state.hunger=clamp(state.hunger-DAILY_PEN_HUNGER,0,STAT_MAX);
+    state.health=clamp(state.health-DAILY_PEN_HEALTH,0,STAT_MAX);
   }
 
-  // 일일 SP 지급
-  if(!eventEnded)state.sp+=DAILY_SP;
+  // 일일 SP 지급 (미사용 포인트는 상한 없이 누적/이월)
+  // 만렙 달성 시 일일 보상 중단
+  if(growthStage<MAX_STAGE)state.sp+=DAILY_SP;
   state.spUsedToday=0;
   state.giftGiven=false;
+  state.feedUsedToday=false;   // 먹이기 일 1회 제한 초기화
 
   popEl('nextBtn');render();updateRedDot();
   if(!state.exploring)showToast('DAY '+day+' 시작!');
-  if(growthStage>=1&&state.health<=0){
-    setTimeout(function(){showToast('⚠️ 체력이 없어요! 모코콩이 쓰러졌어요!');},1600);
+  if(growthStage>=1&&growthStage<MAX_STAGE&&state.health<=0){
+    setTimeout(function(){showToast('⚠️ 체력이 없어요! 먹이기로 회복해주세요!');},1600);
   }
 }
 
@@ -1049,14 +1090,13 @@ function render(){
 
   document.getElementById('numAff').textContent=state.affection;
 
-  // 성장 단계 계산 (1단계=물주기 후, 이후 친밀도 기반)
+  // 성장 단계 계산 (1단계=물주기 후, 이후 누적 친밀도 기반)
   var aff=state.affection;
   var cs=1;
-  if(aff>=3190)cs=10;
-  else if(aff>=2695)cs=9; else if(aff>=2310)cs=8; else if(aff>=1925)cs=7;
-  else if(aff>=1540)cs=6; else if(aff>=1210)cs=5; else if(aff>=880)cs=4;
-  else if(aff>=550)cs=3;  else if(aff>=275)cs=2;  else cs=1;
-  cs=Math.max(1,Math.min(10,cs));
+  for(var s=MAX_STAGE;s>=1;s--){
+    if(aff>=STAGE_THR[s]){cs=s;break;}
+  }
+  cs=Math.max(1,Math.min(MAX_STAGE,cs));
 
   var prevStage=growthStage;
   growthStage=cs;
@@ -1071,10 +1111,9 @@ function render(){
   }
 
   // 하트 5개 — 현재 단계 내 진행도
-  var stStarts={1:0,2:275,3:550,4:880,5:1210,6:1540,7:1925,8:2310,9:2695,10:3190};
-  var stEnds  ={1:275,2:550,3:880,4:1210,5:1540,6:1925,7:2310,8:2695,9:3190,10:3190};
-  var stS=stStarts[cs]||0; var stE=stEnds[cs]||275;
-  var prog=cs>=10?1.0:Math.min(1.0,Math.max(0,(aff-stS)/(stE-stS)));
+  var stS=STAGE_THR[cs]||0;
+  var stE=(cs>=MAX_STAGE)?STAGE_MAX:(STAGE_THR[cs+1]||STAGE_MAX);
+  var prog=cs>=MAX_STAGE?1.0:Math.min(1.0,Math.max(0,(aff-stS)/(stE-stS)));
   for(var h=0;h<5;h++){
     var hPct=0;
     if(prog>=(h+1)/5)hPct=100;
@@ -1092,9 +1131,9 @@ function render(){
 //  리셋
 // ═══════════════════════════════════════════════════
 function resetGame(){
-  state={sp:0,spUsedToday:0,hunger:50,health:50,affection:0,
-    exploring:false,exploreType:null,giftGiven:false,
-    weeklyExplore:1,weekDay:1,weeklyExploreNoticed:false};
+  state={sp:0,spUsedToday:0,hunger:HUNGER_INIT,health:HEALTH_INIT,affection:0,
+    exploring:false,exploreType:null,giftGiven:false,feedUsedToday:false,
+    weeklyExplore:1,weekDay:1,weeklyExploreNoticed:false,boxObtained:[]};
   day=1;gameStarted=false;growthStage=0;eventEnded=false;
   toastTimer=null;speechTimer=null;
 
