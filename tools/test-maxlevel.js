@@ -30,23 +30,22 @@ var pass=0,fail=0;
 function ok(label,cond){ if(cond){pass++;console.log('  ✅ '+label);} else {fail++;console.log('  ❌ '+label);} }
 
 // ══════════════════════════════════════════════════════════
-//  [A] 완주 직전 구간(8단계 달성 ~ 완주 직전, 1,600 ~ 1,879) — 모든 규칙 정상 동작
-//      ※ 승급 = 완주 이므로 "10단계인데 아직 완주 아님" 구간은 존재하지 않음.
-//        9단계 완료(1,880) = 10단계 달성 = 완주 = 탐험 전용 전환 시점.
-//      ※ STAGE_THR[9] === STAGE_THR[10] === 1,880 이므로 마지막 육성 구간은
-//        8단계 달성(1,600 / 40일차) → 1,880(47일차) 까지의 7일입니다.
+//  [A] 완주 직전 구간(9단계 진입 ~ 완주 직전, 1,600 ~ 1,879) — 모든 규칙 정상 동작
+//      ※ STAGE_THR[10] === STAGE_MAX === 1,880 이므로 "10단계인데 아직 완주 아님"
+//        구간은 존재하지 않습니다 (10단계 진입 = 완주 = 탐험 전용 전환 시점).
+//      ※ 마지막 육성 구간은 9단계 진입(1,600 / 40일차) → 1,880(47일차) 까지의 7일입니다.
 // ══════════════════════════════════════════════════════════
 console.log('\n[A] 완주 직전 구간(1,600 → 1,879) — 정상 플레이 유지');
 gameStarted=true; eventEnded=false;
-growthStage=MAX_STAGE-2;
-state.affection=STAGE_THR[MAX_STAGE-2];   // 1,600 = 8단계 달성선 (완주 아님)
+growthStage=MAX_STAGE-1;
+state.affection=STAGE_THR[MAX_STAGE-1];   // 1,600 = 9단계 진입선 (완주 아님)
 state.hunger=60; state.health=60;
 state.sp=200; state.spUsedToday=0; state.giftGiven=false; state.feedUsedToday=false;
 state.weeklyExplore=1; state.exploring=false;
 
-ok('8단계 달성(1,600)은 완주가 아님 (isCompleted=false)', isCompleted()===false);
+ok('9단계 진입(1,600)은 완주가 아님 (isCompleted=false)', isCompleted()===false);
 ok('완주 직전 마지막 육성 구간 = 1,600 → 1,880 (7일)',
-  STAGE_MAX-STAGE_THR[MAX_STAGE-2]===280);
+  STAGE_MAX-STAGE_THR[MAX_STAGE-1]===280);
 
 var aSp=state.sp, aAff=state.affection;
 doAction('feed');
@@ -154,92 +153,108 @@ growthStage=5; state.exploring=false;
 var h3=state.hunger, hp3=state.health;
 nextDay();
 ok('일반 단계: 일일 패널티 적용', state.hunger===h3-DAILY_PEN_HUNGER && state.health===hp3-DAILY_PEN_HEALTH);
-
+//  [E] 새 밸런스 테이블 — 단계 판정 경계값 (진입 친밀도 기준)
 // ══════════════════════════════════════════════════════════
-//  [E] 새 밸런스 테이블 — 단계 판정 경계값
-// ══════════════════════════════════════════════════════════
-console.log('\n[E] 새 친밀도 테이블 단계 경계 판정');
+console.log('\n[E] 새 친밀도 테이블 단계 경계 판정 (진입 친밀도)');
 function stageAt(aff){
   var cs=1;
   for(var s=MAX_STAGE;s>=1;s--){ if(aff>=STAGE_THR[s]){cs=s;break;} }
   return cs;
 }
-// 1단계는 누적 0 → 물주기 실행 시 1일차 시작 즉시 달성
-ok('친밀도 0 → 1단계 (물주기 시 즉시 달성)', stageAt(0)===1);
-ok('친밀도 79 → 1단계 유지', stageAt(79)===1);
-ok('친밀도 80 → 2단계 (2일차 완료)', stageAt(80)===2);
-ok('친밀도 279 → 2단계 유지', stageAt(279)===2);
-ok('친밀도 280 → 3단계 (7일차 완료, 1주차 단거리)', stageAt(280)===3);
-ok('친밀도 559 → 3단계 유지', stageAt(559)===3);
-ok('친밀도 560 → 4단계 (14일차 완료, 2주차 중거리 해금)', stageAt(560)===4);
-ok('친밀도 800 → 5단계 (20일차 완료)', stageAt(800)===5);
-ok('친밀도 1,040 → 6단계 (26일차 완료)', stageAt(1040)===6);
-ok('친밀도 1,320 → 7단계 (33일차 완료)', stageAt(1320)===7);
-ok('친밀도 1,600 → 8단계 (40일차 완료)', stageAt(1600)===8);
-ok('친밀도 1,879 → 8단계 유지 (완주 직전)', stageAt(1879)===8);
-ok('친밀도 1,880 → 10단계 달성 (9단계 완료 즉시 만렙 = 완주)', stageAt(1880)===MAX_STAGE);
-// 10단계는 구간 필요 친밀도가 0 이므로 9단계 표시 구간의 폭은 0 입니다.
-// (누적 1,880 에서 9단계를 통과해 곧바로 10단계가 반환됩니다 — 기획서 [-] 규칙)
-ok('9단계 표시 구간 폭 = 0 (STAGE_THR[9] === STAGE_THR[10])',
-  STAGE_THR[9]===STAGE_THR[MAX_STAGE]);
+// 1단계 진입치 0 → 튜토리얼 완료 시 즉시 승급
+ok('친밀도 0 → 1단계 (튜토리얼 직후 달성)', stageAt(0)===1);
+ok('친밀도 39 → 1단계 유지', stageAt(39)===1);
+ok('친밀도 40 → 2단계 진입 (1일차)', stageAt(40)===2);
+ok('친밀도 119 → 2단계 유지 (1~2일 차 체류)', stageAt(119)===2);
+ok('친밀도 120 → 3단계 진입 (3일차)', stageAt(120)===3);
+ok('친밀도 279 → 3단계 유지', stageAt(279)===3);
+ok('친밀도 280 → 4단계 진입 (7일차, 1주차 단거리)', stageAt(280)===4);
+ok('친밀도 559 → 4단계 유지', stageAt(559)===4);
+ok('친밀도 560 → 5단계 진입 (14일차, 2주차 중거리 해금)', stageAt(560)===5);
+ok('친밀도 800 → 6단계 진입 (20일차)', stageAt(800)===6);
+ok('친밀도 1,040 → 7단계 진입 (26일차)', stageAt(1040)===7);
+ok('친밀도 1,320 → 8단계 진입 (33일차)', stageAt(1320)===8);
+ok('친밀도 1,599 → 8단계 유지', stageAt(1599)===8);
+ok('친밀도 1,600 → 9단계 진입 (40일차)', stageAt(1600)===9);
+ok('친밀도 1,879 → 9단계 유지 (완주 직전)', stageAt(1879)===9);
+ok('친밀도 1,880 → 10단계 진입 = 만렙 완주', stageAt(1880)===MAX_STAGE);
+// 9단계는 실제 폭 280 의 육성 구간을 가집니다 (Turn 11 의 폭 0 규칙 폐기)
+ok('9단계 실구간 존재 (STAGE_THR[9] !== STAGE_THR[10])',
+  STAGE_THR[MAX_STAGE-1]!==STAGE_THR[MAX_STAGE]);
+ok('9단계 구간 폭 = 280', STAGE_THR[MAX_STAGE]-STAGE_THR[MAX_STAGE-1]===280);
 
-// 기획서 표의 '누적 친밀도' 열과 STAGE_THR 이 정확히 일치 (시프트 없음)
-var THR_SPEC={1:0,2:80,3:280,4:560,5:800,6:1040,7:1320,8:1600,9:1880,10:1880};
-ok('STAGE_THR == 기획서 누적 친밀도 열 (시프트 없음)', (function(){
+// 기획서 표의 '진입 친밀도' 열과 STAGE_THR 이 정확히 일치 (시프트 없음)
+var THR_SPEC={1:0,2:40,3:120,4:280,5:560,6:800,7:1040,8:1320,9:1600,10:1880};
+ok('STAGE_THR == 기획서 진입 친밀도 열 (시프트 없음)', (function(){
   for(var s=1;s<=MAX_STAGE;s++){ if(STAGE_THR[s]!==THR_SPEC[s]) return false; }
   return true;
 })());
 
-// 구간 필요 친밀도 = 기획서 기재값
-var NEED_SPEC={1:0,2:80,3:200,4:280,5:240,6:240,7:280,8:280,9:280,10:0};
-ok('STAGE_NEED == 기획서 구간 필요 친밀도 열', (function(){
+// 구간 필요 친밀도 = 기획서 기재값 (해당 단계 → 다음 단계)
+var NEED_SPEC={1:40,2:80,3:160,4:280,5:240,6:240,7:280,8:280,9:280,10:0};
+ok('STAGE_NEED == 기획서 구간 필요 열', (function(){
   for(var s=1;s<=MAX_STAGE;s++){ if(STAGE_NEED[s]!==NEED_SPEC[s]) return false; }
   return true;
 })());
 
-ok('STAGE_NEED[1] = 0 (물주기로 즉시 달성, 체류 0일)', STAGE_NEED[1]===0);
+// 하트 1개당 친밀도 = 구간 필요 / 5
+var HEART_SPEC={1:8,2:16,3:32,4:56,5:48,6:48,7:56,8:56,9:56,10:0};
+ok('HEART_PER == 기획서 하트 1개당 열 (8/16/32/56/48/48/56/56/56)', (function(){
+  for(var s=1;s<=MAX_STAGE;s++){ if(HEART_PER[s]!==HEART_SPEC[s]) return false; }
+  return true;
+})());
+ok('하트 1개당 x 5 == 구간 필요 (모든 단계)', (function(){
+  for(var s=1;s<=MAX_STAGE;s++){ if(HEART_PER[s]*5!==STAGE_NEED[s]) return false; }
+  return true;
+})());
+
+ok('STAGE_NEED[1] = 40 (하트 1개당 8, 1일 체류)', STAGE_NEED[1]===40);
 ok('STAGE_NEED[10] = 0 (만렙 구간 요구치 없음 [-])', STAGE_NEED[MAX_STAGE]===0);
-// 승급 = 완주 : 9단계 완료 누적 = 10단계 누적 = 친밀도 상한
-ok('9단계 완료 누적 == 친밀도 상한 (1,880)', STAGE_THR[MAX_STAGE-1]===STAGE_MAX);
-ok('10단계 달성 누적 == 친밀도 상한 (승급 = 완주, 1,880)', STAGE_THR[MAX_STAGE]===STAGE_MAX);
-ok('8단계(1,600) + 280 = 9단계 완료 = 10단계 달성 = 1,880',
-  STAGE_THR[8]+STAGE_NEED[9]===STAGE_MAX);
+// 진입 = 완주 : 10단계 진입 친밀도 = 친밀도 상한
+ok('10단계 진입 친밀도 == 친밀도 상한 (진입 = 완주, 1,880)', STAGE_THR[MAX_STAGE]===STAGE_MAX);
+ok('9단계(1,600) + 280 = 10단계 진입 = 1,880',
+  STAGE_THR[MAX_STAGE-1]+STAGE_NEED[MAX_STAGE-1]===STAGE_MAX);
+// 진입 사슬: THR[s] = THR[s-1] + NEED[s-1]
+ok('진입 친밀도 사슬 일관 (THR[s] = THR[s-1] + NEED[s-1])', (function(){
+  for(var s=2;s<=MAX_STAGE;s++){ if(STAGE_THR[s]!==STAGE_THR[s-1]+STAGE_NEED[s-1]) return false; }
+  return true;
+})());
 // 단계별 최대 체류 7일 (구간 필요 친밀도 <= 280)
 ok('모든 단계 구간 필요 친밀도 <= 280 (체류 최대 7일)', (function(){
   for(var s=1;s<=MAX_STAGE;s++){ if(STAGE_NEED[s]>280) return false; }
   return true;
 })());
-// 초반 빠른 성장 구간 (2~3단계)
-ok('2단계 구간 = 80 (체류 2일)', STAGE_NEED[2]===80);
-ok('3단계 구간 = 200 (체류 5일, 7일차 완료)', STAGE_NEED[3]===200);
-ok('구간 필요 총합 = 1,880', (function(){
-  var t=0; for(var s=1;s<=MAX_STAGE;s++)t+=STAGE_NEED[s]; return t===STAGE_MAX;
+// 초반 빠른 성장 구간 (1~3단계)
+ok('1단계 구간 = 40 (체류 1일)', STAGE_NEED[1]===40);
+ok('2단계 구간 = 80 (체류 2일, 1~2일 차)', STAGE_NEED[2]===80);
+ok('3단계 구간 = 160 (체류 4일, 3일차 진입)', STAGE_NEED[3]===160);
+ok('구간 필요 총합(1~9) = 1,880', (function(){
+  var t=0; for(var s=1;s<MAX_STAGE;s++)t+=STAGE_NEED[s]; return t===STAGE_MAX;
 })());
-// 각 단계 달성 일차 = 누적 / 40 (일일 +40 기준)
-var DAY_SPEC={1:0,2:2,3:7,4:14,5:20,6:26,7:33,8:40,9:47,10:47};
-ok('각 단계 달성 일차 = 누적/40 (기획서 일치)', (function(){
+// 각 단계 진입 일차 = 진입 친밀도 / 40 (일일 +40 기준)
+var DAY_SPEC={1:0,2:1,3:3,4:7,5:14,6:20,7:26,8:33,9:40,10:47};
+ok('각 단계 진입 일차 = 진입 친밀도/40 (기획서 일치)', (function(){
   for(var s=1;s<=MAX_STAGE;s++){ if(STAGE_THR[s]/40!==DAY_SPEC[s]) return false; }
   return true;
 })());
-ok('10단계 달성(완주) 일차 = 47일차', STAGE_MAX/40===47);
-ok('9단계 완료 일차 = 10단계 달성 일차 = 47일차',
-  STAGE_THR[MAX_STAGE-1]/40===47 && STAGE_THR[MAX_STAGE]/40===47);
-ok('3단계 완료 일차 = 7일차 (1주차 단거리 탐험)', STAGE_THR[3]/40===7);
-ok('4단계 완료 일차 = 14일차 (2주차 중거리 해금)', STAGE_THR[4]/40===14);
+ok('10단계 진입(완주) 일차 = 47일차', STAGE_MAX/40===47);
+ok('9단계 진입 일차 = 40일차', STAGE_THR[MAX_STAGE-1]/40===40);
+ok('3단계 진입 일차 = 3일차', STAGE_THR[3]/40===3);
+ok('4단계 진입 일차 = 7일차 (1주차 단거리 탐험)', STAGE_THR[4]/40===7);
+ok('5단계 진입 일차 = 14일차 (2주차 중거리 해금)', STAGE_THR[5]/40===14);
 ok('10단계 명칭 = 모코코 Lv.10 (만렙코코)', STAGE_NAMES[MAX_STAGE]==='모코코 Lv.10 (만렙코코)');
-
-// ══════════════════════════════════════════════════════════
-//  [F] 주차별 탐험 보상 획득 시점 — 탐험 구간 자동 결정
 //      1~3단계 단거리 / 4~7단계 중거리 / 8~10단계 장거리
+//  [F] 주차별 탐험 보상 획득 시점 — 탐험 구간 자동 결정
+//      1~4단계 단거리 / 5~8단계 중거리 / 9~10단계 장거리
 // ══════════════════════════════════════════════════════════
 console.log('\n[F] 주차별 탐험 보상 획득 시점 (getExploreType)');
 var WEEK_SPEC=[
-  {week:1, day:7,  aff:280,  stage:3,  type:'short'},
-  {week:2, day:14, aff:560,  stage:4,  type:'mid'},
-  {week:3, day:21, aff:840,  stage:5,  type:'mid'},
-  {week:4, day:28, aff:1120, stage:6,  type:'mid'},
-  {week:5, day:35, aff:1400, stage:7,  type:'mid'},
-  {week:6, day:42, aff:1680, stage:8,  type:'long'},
+  {week:1, day:7,  aff:280,  stage:4,  type:'short'},
+  {week:2, day:14, aff:560,  stage:5,  type:'mid'},
+  {week:3, day:21, aff:840,  stage:6,  type:'mid'},
+  {week:4, day:28, aff:1120, stage:7,  type:'mid'},
+  {week:5, day:35, aff:1400, stage:8,  type:'mid'},
+  {week:6, day:42, aff:1680, stage:9,  type:'long'},
   {week:7, day:47, aff:1880, stage:10, type:'long'}
 ];
 WEEK_SPEC.forEach(function(w){
@@ -250,10 +265,12 @@ WEEK_SPEC.forEach(function(w){
   growthStage=w.stage;
   ok('  '+w.week+'주차 탐험 구간 = '+w.type, getExploreType()===w.type);
 });
-ok('1주차(7일차) = 3단계 완료 시점 단거리 탐험',
-  STAGE_THR[3]/40===WEEK_SPEC[0].day && WEEK_SPEC[0].type==='short');
-ok('2주차(14일차) = 4단계 진입 시점 중거리 해금',
-  STAGE_THR[4]/40===WEEK_SPEC[1].day && WEEK_SPEC[1].type==='mid');
+ok('1주차(7일차) = 4단계 진입 시점 단거리 탐험',
+  STAGE_THR[4]/40===WEEK_SPEC[0].day && WEEK_SPEC[0].type==='short');
+ok('2주차(14일차) = 5단계 진입 시점 중거리 해금',
+  STAGE_THR[5]/40===WEEK_SPEC[1].day && WEEK_SPEC[1].type==='mid');
+ok('6주차(42일차) = 9단계 장거리 진입',
+  WEEK_SPEC[5].stage===MAX_STAGE-1 && WEEK_SPEC[5].type==='long');
 ok('7주차(47일차) = 만렙 도달 후 장거리 탐험 전용',
   WEEK_SPEC[6].aff===STAGE_MAX && WEEK_SPEC[6].type==='long');
 // 단거리는 미지의 상자 없음 / 중·장거리는 미지의 상자 포함
@@ -261,9 +278,9 @@ ok('단거리 탐험: 미지의 상자 미포함', EXPLORE_DEF.short.box===false
 ok('중거리 탐험: 미지의 상자 포함', EXPLORE_DEF.mid.box===true);
 ok('장거리 탐험: 미지의 상자 포함', EXPLORE_DEF.long.box===true);
 // 탐험 구간 단계 경계가 기획 조건과 일치
-ok('단거리 구간 = 1~3단계', EXPLORE_DEF.short.stageMin===1 && EXPLORE_DEF.short.stageMax===3);
-ok('중거리 구간 = 4~7단계', EXPLORE_DEF.mid.stageMin===4 && EXPLORE_DEF.mid.stageMax===7);
-ok('장거리 구간 = 8~10단계', EXPLORE_DEF.long.stageMin===8 && EXPLORE_DEF.long.stageMax===MAX_STAGE);
+ok('단거리 구간 = 1~4단계', EXPLORE_DEF.short.stageMin===1 && EXPLORE_DEF.short.stageMax===4);
+ok('중거리 구간 = 5~8단계', EXPLORE_DEF.mid.stageMin===5 && EXPLORE_DEF.mid.stageMax===8);
+ok('장거리 구간 = 9~10단계', EXPLORE_DEF.long.stageMin===9 && EXPLORE_DEF.long.stageMax===MAX_STAGE);
 
 console.log('\n통과 '+pass+' / 실패 '+fail);
 process.exit(fail===0?0:1);
