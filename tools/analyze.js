@@ -67,30 +67,36 @@ console.log('     동일 30P: 먹이기 1회(+20) vs 놀아주기 3회(+60)');
 //  [B] 성장 단계 구조
 // ───────────────────────────────────────────────
 hr('[B] 성장 단계 구조');
-console.log('  단계  ' + pad('명칭', 26) + pad('누적 임계', 11, true) + pad('구간 필요', 11, true));
+console.log('  단계  ' + pad('명칭', 26) + pad('진입 친밀도', 13, true) +
+  pad('구간 필요', 11, true) + pad('하트 1개당', 12, true));
 for (var s = 1; s <= SPEC.MAX_STAGE; s++) {
+  var isM = (s === SPEC.MAX_STAGE);
   console.log('  ' + pad(s, 6) + pad(SPEC.STAGE_NAMES[s], 26) +
-    pad(SPEC.STAGE_THR[s].toLocaleString(), 11, true) +
-    pad(SPEC.STAGE_NEED[s] || '-', 11, true));
+    pad(SPEC.STAGE_THR[s].toLocaleString(), 13, true) +
+    pad(isM ? '-' : SPEC.STAGE_NEED[s], 11, true) +
+    pad(isM ? '-' : SPEC.HEART_PER[s], 12, true));
 }
 var sumNeed = 0; for (var k = 1; k < SPEC.MAX_STAGE; k++) sumNeed += SPEC.STAGE_NEED[k];
 var sumAll = sumNeed + SPEC.STAGE_NEED[SPEC.MAX_STAGE];
-console.log('\n  1~9단계 필요 총합 = ' + sumNeed.toLocaleString() +
-            ' = 9단계 완료 누적 ' + SPEC.STAGE_THR[SPEC.MAX_STAGE - 1].toLocaleString() +
+console.log('\n  1~9단계 구간 필요 총합 = ' + sumNeed.toLocaleString() +
+            ' = 10단계 진입 친밀도 ' + SPEC.STAGE_THR[SPEC.MAX_STAGE].toLocaleString() +
             ' = 친밀도 상한 ' + SPEC.STAGE_MAX.toLocaleString());
 console.log('  10단계 구간 필요 친밀도 [-] (0) \u2192 총합 그대로 ' + sumAll.toLocaleString());
-console.log('  \u203b 9단계 완료(' + SPEC.STAGE_MAX.toLocaleString() + ') 즉시 10단계 도달 = 완주' +
-            ' (' + SPEC.STAGE_DONE_DAY[SPEC.MAX_STAGE] + '일차)' +
-            ' \u2014 STAGE_THR[9] === STAGE_THR[10] === STAGE_MAX');
-console.log('  \u203b 10단계(만렙코코)는 구간 체류 기간·구간 필요 친밀도가 모두 없습니다 [-].');
-console.log('\n  단계  체류(일)  구간필요  완료일차   [일일 +40 기준]');
+console.log('  \u203b 10단계 진입(' + SPEC.STAGE_MAX.toLocaleString() + ') = 만렙 완주' +
+            ' (' + SPEC.STAGE_ENTRY_DAY[SPEC.MAX_STAGE] + '일차)' +
+            ' \u2014 STAGE_THR[10] === STAGE_MAX');
+console.log('  \u203b 10단계(만렙코코)는 구간 필요 친밀도·하트 1개당 수치가 없습니다 [-] (하트 5개 고정).');
+console.log('  \u203b 하트 1개당 = 구간 필요 \u00f7 5 \u2192 8/16/32/56/48/48/56/56/56');
+
+console.log('\n  단계  체류(일)  구간필요  하트1개당  진입일차   [일일 +40 기준]');
 for (var s3 = 1; s3 <= SPEC.MAX_STAGE; s3++) {
-  // 10단계는 체류 기간·구간 필요 친밀도가 없으므로 기획서와 동일하게 [-] 표기
+  // 10단계는 체류 기간·구간 필요·하트 1개당이 없으므로 기획서와 동일하게 [-] 표기
   var isMax = (s3 === SPEC.MAX_STAGE);
   console.log('  ' + pad(s3, 6) +
     pad(isMax ? '-' : SPEC.STAGE_DWELL[s3], 9, true) +
     pad(isMax ? '-' : SPEC.STAGE_NEED[s3], 10, true) +
-    pad((SPEC.STAGE_DONE_DAY[s3] || 0) + '일차', 10, true));
+    pad(isMax ? '-' : SPEC.HEART_PER[s3], 11, true) +
+    pad((SPEC.STAGE_ENTRY_DAY[s3] || 0) + '일차', 10, true));
 }
 
 // ── 주차별 탐험 보상 획득 시점 테이블 ──
@@ -105,8 +111,8 @@ SPEC.EXPLORE_SCHEDULE.forEach(function (w) {
     pad(w.stage + '단계', 7, true) +
     pad(w.tierName, 11, true) + '  ' + w.reward);
 });
-console.log('  \u203b 1주차 단거리 = 3단계 완료(7일차) / 2주차 중거리 해금 = 4단계 진입(14일차)');
-console.log('  \u203b 7주차 47일차 완주 \u2192 만렙 도달 및 탐험 전용 전환');
+console.log('  \u203b 1주차 단거리 = 4단계 진입(7일차) / 2주차 중거리 해금 = 5단계 진입(14일차)');
+console.log('  \u203b 6주차 장거리 = 9단계 진입 구간 / 7주차 47일차 완주 \u2192 만렙 탐험 전용 전환');
 
 // ───────────────────────────────────────────────
 //  [C] 전략 비교
@@ -168,22 +174,26 @@ issue('high', '최적 플레이가 곧 페널티 (놀아주기 우선 체력 0 '
 ]);
 
 issue(base.completeDay ? 'ok' : 'high',
-  '10단계 달성(완주) ' + SPEC.STAGE_MAX.toLocaleString() + ' — ' +
+  '10단계 진입(완주) ' + SPEC.STAGE_MAX.toLocaleString() + ' — ' +
   (base.completeDay ? base.completeDay + '일차' : '미달'), [
-  '9단계 완료 누적 ' + SPEC.STAGE_THR[SPEC.MAX_STAGE - 1].toLocaleString() +
-    ' === 10단계 누적 === 친밀도 상한 ' + SPEC.STAGE_MAX.toLocaleString() +
-    ' → 9단계 완료 즉시 만렙 도달 (승급 = 완주)',
-  '10단계는 구간 체류 기간·구간 필요 친밀도가 없음 [-] → 마지막 육성 구간은 ' +
-    '8단계(' + SPEC.STAGE_THR[8].toLocaleString() + ', ' + SPEC.STAGE_DONE_DAY[8] +
+  '10단계 진입 친밀도 ' + SPEC.STAGE_THR[SPEC.MAX_STAGE].toLocaleString() +
+    ' === 친밀도 상한 ' + SPEC.STAGE_MAX.toLocaleString() +
+    ' → 10단계 진입 즉시 만렙 완주 (진입 = 완주)',
+  '10단계는 구간 필요 친밀도·하트 1개당 수치가 없음 [-] → 마지막 육성 구간은 ' +
+    '9단계(' + SPEC.STAGE_THR[SPEC.MAX_STAGE - 1].toLocaleString() + ', ' +
+    SPEC.STAGE_ENTRY_DAY[SPEC.MAX_STAGE - 1] +
     '일차) → ' + SPEC.STAGE_MAX.toLocaleString() +
-    ' (구간 ' + SPEC.STAGE_NEED[9] + ' = 일일 +40 x ' + SPEC.STAGE_DWELL[9] + '일)',
-  '초반 빠른 성장: 3단계 완료 ' + SPEC.STAGE_DONE_DAY[3] + '일차 (1주차 단거리 탐험) / ' +
-    '4단계 완료 ' + SPEC.STAGE_DONE_DAY[4] + '일차 (2주차 중거리 탐험 해금)',
-  '10단계 달성(1,880) 이후 규칙: SP 지급 유지 / 일일 패널티 미적용 / 먹이기·놀아주기 비활성 /' +
+    ' (구간 ' + SPEC.STAGE_NEED[SPEC.MAX_STAGE - 1] + ' = 일일 +40 x ' +
+    SPEC.STAGE_DWELL[SPEC.MAX_STAGE - 1] + '일)',
+  '초반 빠른 성장: 2단계 진입 ' + SPEC.STAGE_ENTRY_DAY[2] + '일차 / 3단계 진입 ' +
+    SPEC.STAGE_ENTRY_DAY[3] + '일차 / 4단계 진입 ' + SPEC.STAGE_ENTRY_DAY[4] +
+    '일차 (1주차 단거리 탐험) / 5단계 진입 ' + SPEC.STAGE_ENTRY_DAY[5] +
+    '일차 (2주차 중거리 탐험 해금)',
+  '10단계 진입(1,880) 이후 규칙: SP 지급 유지 / 일일 패널티 미적용 / 먹이기·놀아주기 비활성 /' +
     ' 일일 보상 불가 / 탐험은 SP만 소모 (스탯 소모 없음)',
   base.completeDay
-    ? '10단계 달성 = 완주 = ' + base.completeDay + '일차' +
-      (base.completeDay === SPEC.STAGE_DONE_DAY[10] ? '  [기획 기대: 47일차 일치]' : '')
+    ? '10단계 진입 = 완주 = ' + base.completeDay + '일차' +
+      (base.completeDay === SPEC.STAGE_ENTRY_DAY[10] ? '  [기획 기대: 47일차 일치]' : '')
     : '기간 내 완주 미달'
 ]);
 

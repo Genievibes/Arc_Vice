@@ -31,12 +31,12 @@
     },
     EXPLORE: { sp: 40, hunger: -25, health: -30, affection: +40, label: '탐험' },
 
-    // 누적 친밀도 승급 임계값 (밸런스 테이블 '누적 친밀도' 열)
-    //  ※ STAGE_THR[s] = s단계를 "달성(= 완료)"하는 누적 친밀도 (기획서 표의 '누적 친밀도' 열 그대로)
-    //  ※ STAGE_THR[1]=0 → 물주기 시 1일차 시작 즉시 1단계 달성 (체류 0일)
-    //  ※ STAGE_THR[9] === STAGE_THR[10] === STAGE_MAX === 1,880
-    //     → 9단계 완료(47일차) 즉시 10단계 도달 = 완주 (10단계 체류·요구치 없음 [-])
-    STAGE_THR: { 1: 0, 2: 80, 3: 280, 4: 560, 5: 800, 6: 1040, 7: 1320, 8: 1600, 9: 1880, 10: 1880 },
+    // 진입 친밀도 (기획서 1. 캐릭터 성장 및 친밀도 테이블 · 총 11단계)
+    //  ※ STAGE_THR[s] = s단계에 "진입"하는 데 필요한 친밀도 (기획서 표의 '진입 친밀도' 열 그대로)
+    //  ※ STAGE_THR[0] = STAGE_THR[1] = 0 → 튜토리얼 완료 시 즉시 1단계 승급
+    //  ※ STAGE_THR[10] === STAGE_MAX === 1,880
+    //     → 10단계 진입 = 만렙 완주 (10단계 구간 필요·하트 1개당 수치 없음 [-])
+    STAGE_THR: { 1: 0, 2: 40, 3: 120, 4: 280, 5: 560, 6: 800, 7: 1040, 8: 1320, 9: 1600, 10: 1880 },
 
     STAGE_NAMES: {
       0: '모코코 씨앗', 1: '모코콩 Lv.1', 2: '모코콩 Lv.2', 3: '모코콩 Lv.3',
@@ -47,46 +47,57 @@
     // 단계별 구간 체류 기간 (일일 +40 기준) — 검증용 기대값
     //  · 1단계: 물주기로 당일 즉시 승급 (체류 0일)
     //  · 2~3단계: 초반 빠른 성장 (2일 / 5일)
+    // 단계별 구간 체류 기간 (일일 +40 기준, = STAGE_NEED[s] / 40) — 검증용 기대값
+    //  · 1단계: 진입치 0 → 튜토리얼 직후 달성, 40을 채우는 1일 체류
+    //  · 2~3단계: 초반 빠른 성장 (2일 / 4일)
     //  · 4~9단계: 점진적 성장, 단계별 최대 7일 이내 체류
-    //  · 10단계: 체류 기간 없음 [-] (9단계 완료 즉시 도달)
-    STAGE_DWELL: { 1: 0, 2: 2, 3: 5, 4: 7, 5: 6, 6: 6, 7: 7, 8: 7, 9: 7, 10: 0 },
-    // 단계별 누적 완료 일차 (STAGE_THR[s] / 40) — 검증용 기대값
-    //  · 3단계 = 7일차 완료  → 1주차 단거리 탐험 구간
-    //  · 4단계 = 14일차 완료 → 2주차 중거리 탐험 해금 시점
-    //  · 9단계 = 47일차 완료 → 즉시 10단계(만렙코코) 도달 = 47일차 최종 완성
-    STAGE_DONE_DAY: { 1: 0, 2: 2, 3: 7, 4: 14, 5: 20, 6: 26, 7: 33, 8: 40, 9: 47, 10: 47 },
+    //  · 10단계: 체류 기간 없음 [-] (만렙 완주)
+    STAGE_DWELL: { 1: 1, 2: 2, 3: 4, 4: 7, 5: 6, 6: 6, 7: 7, 8: 7, 9: 7, 10: 0 },
+    // 단계별 진입 일차 (STAGE_THR[s] / 40) — 검증용 기대값
+    //  · 1단계 = 0일차(튜토리얼 직후) / 2단계 = 1일차 / 3단계 = 3일차 진입
+    //  · 4단계 = 7일차 진입  → 1주차 단거리 탐험 구간
+    //  · 5단계 = 14일차 진입 → 2주차 중거리 탐험 해금 시점
+    //  · 10단계 = 47일차 진입 = 만렙 완주 (최종 완성)
+    STAGE_ENTRY_DAY: { 1: 0, 2: 1, 3: 3, 4: 7, 5: 14, 6: 20, 7: 26, 8: 33, 9: 40, 10: 47 },
 
     // 주차별 탐험 보상 획득 시점 (일일 +40 정속 성장 기준)
     //  · 탐험은 주간 1회, 정기점검(수요일 = weekDay 1)에 초기화
-    //  · tier: 1~3단계 단거리(A) / 4~7단계 중거리(B+D) / 8~10단계 장거리(C+D)
+    //  · tier: 1~4단계 단거리(A) / 5~8단계 중거리(B+D) / 9~10단계 장거리(C+D)
     EXPLORE_SCHEDULE: [
-      { week: 1, dayFrom: 1,  dayTo: 7,  exploreDay: 7,  affection: 280,  stage: 3,  tier: 'short', tierName: '단거리', reward: 'A',     note: '1주차 단거리 탐험 (3단계 완료 시점)' },
-      { week: 2, dayFrom: 8,  dayTo: 14, exploreDay: 14, affection: 560,  stage: 4,  tier: 'mid',   tierName: '중거리', reward: 'B + D', note: '2주차 중거리 탐험 해금 (4단계 진입)' },
-      { week: 3, dayFrom: 15, dayTo: 21, exploreDay: 21, affection: 840,  stage: 5,  tier: 'mid',   tierName: '중거리', reward: 'B + D', note: '점진적 성장' },
-      { week: 4, dayFrom: 22, dayTo: 28, exploreDay: 28, affection: 1120, stage: 6,  tier: 'mid',   tierName: '중거리', reward: 'B + D', note: '점진적 성장' },
-      { week: 5, dayFrom: 29, dayTo: 35, exploreDay: 35, affection: 1400, stage: 7,  tier: 'mid',   tierName: '중거리', reward: 'B + D', note: '최대 체류 정속 성장' },
-      { week: 6, dayFrom: 36, dayTo: 42, exploreDay: 42, affection: 1680, stage: 8,  tier: 'long',  tierName: '장거리', reward: 'C + D', note: '장거리 탐험 진입' },
+      { week: 1, dayFrom: 1,  dayTo: 7,  exploreDay: 7,  affection: 280,  stage: 4,  tier: 'short', tierName: '단거리', reward: 'A',     note: '1주차 단거리 탐험 (4단계 진입 시점)' },
+      { week: 2, dayFrom: 8,  dayTo: 14, exploreDay: 14, affection: 560,  stage: 5,  tier: 'mid',   tierName: '중거리', reward: 'B + D', note: '2주차 중거리 탐험 해금 (5단계 진입)' },
+      { week: 3, dayFrom: 15, dayTo: 21, exploreDay: 21, affection: 840,  stage: 6,  tier: 'mid',   tierName: '중거리', reward: 'B + D', note: '점진적 성장' },
+      { week: 4, dayFrom: 22, dayTo: 28, exploreDay: 28, affection: 1120, stage: 7,  tier: 'mid',   tierName: '중거리', reward: 'B + D', note: '점진적 성장' },
+      { week: 5, dayFrom: 29, dayTo: 35, exploreDay: 35, affection: 1400, stage: 8,  tier: 'mid',   tierName: '중거리', reward: 'B + D', note: '최대 체류 정속 성장' },
+      { week: 6, dayFrom: 36, dayTo: 42, exploreDay: 42, affection: 1680, stage: 9,  tier: 'long',  tierName: '장거리', reward: 'C + D', note: '장거리 탐험 진입' },
       { week: 7, dayFrom: 43, dayTo: 49, exploreDay: 47, affection: 1880, stage: 10, tier: 'long',  tierName: '장거리', reward: 'C + D', note: '47일차 완주 → 만렙 탐험 전용 전환' }
     ],
-
     DAY_NAMES: ['수', '목', '금', '토', '일', '월', '화']  // weekDay 1 = 수(정기점검)
   };
-
-  // 구간 폭(구간 필요 친밀도) — 누적 임계값에서 도출 → 두 표가 어긋날 수 없음
-  // 도출 결과: 0/80/200/280/240/240/280/280/280/0 (총합 1,880)
-  //  · need[1]  = 0 → 물주기로 1일차 시작 즉시 달성
-  //  · need[10] = 0 → 9단계 완료(1,880) 즉시 만렙 도달 (요구치 없음 [-])
+  // 구간 필요 친밀도 — 해당 단계에서 다음 단계로 올라가는 데 필요한 양
+  // 진입 친밀도(STAGE_THR)에서 도출 → 두 표가 어긋날 수 없음
+  // 도출 결과: 40/80/160/280/240/240/280/280/280/0 (1~9 총합 1,880)
+  //  · need[10] = 0 → 10단계 진입(1,880)이 곧 만렙 완주 (요구치 없음 [-])
   SPEC.STAGE_NEED = (function () {
     var need = {};
-    need[1] = 0;                                    // 1단계: 물주기로 즉시 달성 (누적 0)
-    for (var s = 2; s <= SPEC.MAX_STAGE; s++) need[s] = SPEC.STAGE_THR[s] - SPEC.STAGE_THR[s - 1];
-    return need;                                    // need[10] === 0 (만렙 요구치 없음)
+    for (var s = 1; s < SPEC.MAX_STAGE; s++) need[s] = SPEC.STAGE_THR[s + 1] - SPEC.STAGE_THR[s];
+    need[SPEC.MAX_STAGE] = 0;                       // need[10] === 0 (만렙 요구치 없음)
+    return need;
+  })();
+
+  // 하트 1개당 친밀도 = 구간 필요 친밀도 / 5 (하트 5개로 한 단계를 채움)
+  // 도출 결과: 8/16/32/56/48/48/56/56/56 (10단계는 0 → 하트 5개 고정 표시)
+  SPEC.HEART_PER = (function () {
+    var per = {};
+    for (var s = 1; s <= SPEC.MAX_STAGE; s++) per[s] = SPEC.STAGE_NEED[s] / 5;
+    return per;
   })();
 
   function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
-
-  // 누적 친밀도 → 성장 단계 (역방향 스캔)
-  //  · aff 0     → 1단계 (물주기 시 즉시 달성)
+  function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+  // 누적 친밀도 → 성장 단계 (역방향 스캔, 진입 친밀도 기준)
+  //  · aff 0     → 1단계 (진입치 0, 튜토리얼 직후 달성)
+  //  · aff 1,879 → 9단계 / aff 1,880 → 10단계 (만렙 완주)
   //  · aff 1,880 → 10단계 (STAGE_THR[9]===STAGE_THR[10] 이므로 9단계를 통과해 만렙 반환)
   function stageOf(aff) {
     var cs = 1;
